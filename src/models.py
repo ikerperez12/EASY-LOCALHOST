@@ -72,7 +72,7 @@ class AppState:
     """Global application state."""
     ports: list[PortInfo] = field(default_factory=list)
     last_scan_time: Optional[float] = None
-    scan_interval_ms: int = 2000  # 2 seconds default
+    scan_interval_ms: int = 7000
     is_scanning: bool = False
     always_on_top: bool = True
     total_scans: int = 0

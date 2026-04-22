@@ -9,11 +9,11 @@ import sys
 
 # Application metadata
 APP_NAME = "Easy Localhost"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
 APP_AUTHOR = "Iker"
 
 # Default scan interval in milliseconds
-DEFAULT_SCAN_INTERVAL = 2000
+DEFAULT_SCAN_INTERVAL = 7000
 
 # HTTP health check timeout in seconds
 HEALTH_CHECK_TIMEOUT = 1.0

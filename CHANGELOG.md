@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0
+
+- Fixed the flat-list regression by replacing the port list with folder/project-based collapsible groups.
+- Added stable scroll restoration so auto-refresh does not reset the user's scroll position.
+- Changed auto-refresh to a calmer 7-second default and added manual 5s/10s interval controls.
+- Added a clear manual reload action.
+- Improved dense-session readability by showing process/PID details inside each folder group.
+- Documented the Microsoft SmartScreen limitation for unsigned portable Windows executables.
+
 ## 1.1.0
 
 - Redesigned the desktop interface with a pure black base and sunset/lavender/mauve palette.

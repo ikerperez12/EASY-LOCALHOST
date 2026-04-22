@@ -23,6 +23,9 @@ Easy Localhost gives you a small always-on-top panel focused only on that.
 - Compact floating Windows UI designed to stay visible in a screen corner
 - Premium black visual system with sunset, lavender, and mauve accents
 - Shared app icon embedded in the executable and used inside the UI
+- Collapsible grouping by project/folder so large localhost sessions stay manageable
+- Stable scroll behavior during refreshes
+- Manual reload plus configurable auto-refresh presets of 5s and 10s
 - Automatic project detection from Git roots, `package.json`, and common project markers
 - HTTP health probing to distinguish active servers from plain listeners
 - One-click actions per entry:
@@ -72,6 +75,16 @@ The generated binary is:
 
 ```text
 dist\EasyLocalhost.exe
+```
+
+## Windows SmartScreen
+
+The portable EXE is unsigned. Microsoft SmartScreen may show a warning for new unsigned apps until the file builds reputation or is code-signed with a paid certificate. This is normal for independent open-source Windows binaries and cannot be fully eliminated from code alone.
+
+For verification, compare the SHA256 hash published in each GitHub Release with the downloaded file:
+
+```powershell
+Get-FileHash .\EasyLocalhost.exe -Algorithm SHA256
 ```
 
 ## Tests
