@@ -77,12 +77,12 @@ python -m unittest discover -s tests -v
 
 ## Release Automation
 
-This repo includes a GitHub Actions workflow that:
+This repo includes a GitHub Actions workflow that can be triggered manually to:
 
 - runs tests on Windows
 - builds the portable executable
 - uploads the executable as an artifact
-- attaches the executable to a GitHub Release when you push a tag like `v1.0.0`
+- can publish the executable to a GitHub Release when you run it against a tagged commit
 
 ## Project Structure
 
