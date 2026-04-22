@@ -3,6 +3,8 @@
 Easy Localhost is a compact Windows desktop controller for local development servers.
 It keeps a live view of the localhost ports you actually care about, shows which project they belong to, and lets you act on them without dropping to terminal commands.
 
+The interface is intentionally small, dark, and premium: pure black background, sunset/lavender/mauve accents, rounded panels, and one consistent app icon across the window, executable, and release asset.
+
 ## What It Solves
 
 When you work with multiple repos, AI coding tools, IIS Express, `npm run dev`, `dotnet`, Python dev servers, or several versions of the same app, localhost becomes noisy fast. It is common to end up with many listening ports and very little context about:
@@ -19,6 +21,8 @@ Easy Localhost gives you a small always-on-top panel focused only on that.
 
 - Live localhost monitoring with low overhead
 - Compact floating Windows UI designed to stay visible in a screen corner
+- Premium black visual system with sunset, lavender, and mauve accents
+- Shared app icon embedded in the executable and used inside the UI
 - Automatic project detection from Git roots, `package.json`, and common project markers
 - HTTP health probing to distinguish active servers from plain listeners
 - One-click actions per entry:
@@ -41,6 +45,7 @@ This repository is intentionally narrow in scope.
 - It never connects to external hosts.
 - It does not collect telemetry.
 - It does not store secrets, tokens, or credentials.
+- It does not commit or require machine-specific absolute paths.
 - It does not require admin rights unless you try to close a process that Windows protects.
 
 ## Stack

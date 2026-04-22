@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0
+
+- Redesigned the desktop interface with a pure black base and sunset/lavender/mauve palette.
+- Increased corner radii, strengthened borders, and improved visual hierarchy for a more premium compact widget.
+- Added a new shared app icon and wired it into the window UI, embedded executable icon, and packaged assets.
+- Included icon assets in the PyInstaller one-file build so the packaged app uses the same branding at runtime.
+- Versioned the PyInstaller spec so the public repo can reproduce the packaged executable.
+- Revalidated tests, static security scan, dependency audit, packaged executable startup, and real localhost detection.
+
 ## 1.0.1
 
 - Added automated local and CI security checks with Bandit and pip-audit.

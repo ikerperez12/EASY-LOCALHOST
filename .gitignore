@@ -28,6 +28,7 @@ desktop.ini
 # PyInstaller
 *.manifest
 *.exe
+!EasyLocalhost.spec
 
 # Misc
 *.log
