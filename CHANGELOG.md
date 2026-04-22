@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.1
+
+- Reworked the process display into high-contrast rows so ports and processes are immediately visible.
+- Switched the visual palette to pure black plus cacao, sand, warm brown, sage, and soft aqua tones.
+- Kept active groups open by default while leaving groups without active ports collapsed.
+- Added clearer action color separation for Open, Copy, Source, and Close.
+- Regenerated the app icon with a cleaner localhost panel shape and earth-tone palette.
+
 ## 1.2.0
 
 - Fixed the flat-list regression by replacing the port list with folder/project-based collapsible groups.

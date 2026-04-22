@@ -3,7 +3,7 @@
 Easy Localhost is a compact Windows desktop controller for local development servers.
 It keeps a live view of the localhost ports you actually care about, shows which project they belong to, and lets you act on them without dropping to terminal commands.
 
-The interface is intentionally small, dark, and premium: pure black background, sunset/lavender/mauve accents, rounded panels, and one consistent app icon across the window, executable, and release asset.
+The interface is intentionally small, dark, and premium: pure black background, cacao/arena earth tones, rounded panels, high-contrast process rows, and one consistent app icon across the window, executable, and release asset.
 
 ## What It Solves
 
@@ -21,9 +21,10 @@ Easy Localhost gives you a small always-on-top panel focused only on that.
 
 - Live localhost monitoring with low overhead
 - Compact floating Windows UI designed to stay visible in a screen corner
-- Premium black visual system with sunset, lavender, and mauve accents
+- Premium black visual system with cacao, sand, warm brown, and soft aqua accents
 - Shared app icon embedded in the executable and used inside the UI
 - Collapsible grouping by project/folder so large localhost sessions stay manageable
+- High-contrast process rows with large port labels and visible status bars
 - Stable scroll behavior during refreshes
 - Manual reload plus configurable auto-refresh presets of 5s and 10s
 - Automatic project detection from Git roots, `package.json`, and common project markers
