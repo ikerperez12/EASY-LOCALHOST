@@ -16,8 +16,9 @@ from PIL import Image
 
 from actions import ActionResult, kill_process_tree, open_in_browser, open_in_folder
 from controller import LocalhostController, ScanResult
-from models import AppState, PortInfo, PortStatus
-from utils import APP_NAME, APP_VERSION, get_icon_path, truncate_path
+from models import AppState, PortInfo, PortStatus, RefreshMode, next_refresh_mode
+from presentation_state import merge_new_group_expansion, summarize_port_chips
+from utils import APP_DISPLAY_NAME, APP_NAME, APP_VERSION, get_icon_path, truncate_path
 
 logger = logging.getLogger(__name__)
 
@@ -25,34 +26,32 @@ ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("green")
 
 CANVAS = "#000000"
-SURFACE = "#291C0E"
-SURFACE_ALT = "#122324"
-SURFACE_RAISED = "#2F3A32"
-SURFACE_CARD = "#3E2411"
-SURFACE_CARD_ALT = "#545748"
-ROW_A = "#122324"
-ROW_B = "#2F3A32"
-BORDER = "#A78D78"
-BORDER_STRONG = "#DB9F75"
-TEXT = "#FDE8D3"
-TEXT_SOFT = "#DAEBE3"
-TEXT_MUTED = "#CFD6C4"
-ACCENT = "#DB9F75"
-ACCENT_AQUA = "#99CDD8"
-ACCENT_MAUVE = "#BEB5A9"
-ACCENT_DEEP = "#6E473B"
-ACCENT_SAGE = "#657166"
-HOVER_WARM = "#F3C3B2"
-DANGER = "#804012"
-DANGER_DEEP = "#3E2411"
-
-REFRESH_PRESETS_MS = (5000, 10000)
+SURFACE = "#0C0F12"
+SURFACE_ELEVATED = "#13181E"
+SURFACE_CARD = "#171D24"
+SURFACE_ROW = "#1C232B"
+SURFACE_ROW_ALT = "#181F27"
+SURFACE_TINT = "#202833"
+BORDER = "#2A333D"
+BORDER_STRONG = "#3A4652"
+TEXT = "#F3F6F8"
+TEXT_SOFT = "#A6B1BC"
+TEXT_MUTED = "#7D8996"
+ACCENT = "#C7F36B"
+ACCENT_HOVER = "#D9FF90"
+ACCENT_DEEP = "#253116"
+WARNING = "#D6A85F"
+WARNING_DEEP = "#2C2417"
+DANGER = "#D96B5F"
+DANGER_DEEP = "#2C1918"
+UNKNOWN = "#5D6873"
+UNKNOWN_DEEP = "#161C22"
 
 STATUS_META = {
-    PortStatus.ACTIVE: ("Active", "#99CDD8", "#122324"),
-    PortStatus.LISTENING: ("Listening", "#DB9F75", "#291C0E"),
-    PortStatus.ZOMBIE: ("Stuck", "#F3C3B2", "#804012"),
-    PortStatus.UNKNOWN: ("Unknown", "#E1D4C2", "#545748"),
+    PortStatus.ACTIVE: ("Active", ACCENT, ACCENT_DEEP),
+    PortStatus.LISTENING: ("Listening", WARNING, WARNING_DEEP),
+    PortStatus.ZOMBIE: ("Stuck", DANGER, DANGER_DEEP),
+    PortStatus.UNKNOWN: ("Unknown", UNKNOWN, UNKNOWN_DEEP),
 }
 
 
@@ -69,21 +68,44 @@ class PortGroupData:
     def active_count(self) -> int:
         return sum(1 for port in self.ports if port.status is PortStatus.ACTIVE)
 
+    @property
+    def port_chips(self) -> tuple[str, ...]:
+        return summarize_port_chips(self.ports)
+
+
+def _button_colors(variant: str) -> tuple[str, str, str, str]:
+    if variant == "primary":
+        return ACCENT, ACCENT_HOVER, ACCENT, CANVAS
+    if variant == "accent":
+        return ACCENT_DEEP, SURFACE_TINT, ACCENT, TEXT
+    if variant == "secondary":
+        return SURFACE_ELEVATED, SURFACE_ROW, BORDER, TEXT
+    if variant == "ghost":
+        return "transparent", SURFACE_TINT, BORDER_STRONG, TEXT_SOFT
+    if variant == "danger":
+        return "transparent", DANGER_DEEP, DANGER, DANGER
+    raise ValueError(f"Unsupported button variant: {variant}")
+
+
+def _bind_left_click(widgets, callback) -> None:
+    for widget in widgets:
+        widget.bind("<Button-1>", lambda _event, cb=callback: cb())
+
 
 class EasyLocalhostApp(ctk.CTk):
     """Compact floating desktop window for localhost monitoring."""
 
     def __init__(self) -> None:
         super().__init__()
-        self.title(f"{APP_NAME} {APP_VERSION}")
+        self.title(f"{APP_DISPLAY_NAME} - {APP_VERSION}")
         self.configure(fg_color=CANVAS)
-        self.minsize(460, 500)
+        self.minsize(500, 560)
         self.geometry(self._default_geometry())
         self.attributes("-topmost", True)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self._set_window_icon()
 
-        self.app_state = AppState(scan_interval_ms=7000, always_on_top=True)
+        self.app_state = AppState(refresh_mode=RefreshMode.AUTO, always_on_top=True)
         self.controller = LocalhostController()
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="scan")
         self.scan_future: Future[ScanResult] | None = None
@@ -99,9 +121,11 @@ class EasyLocalhostApp(ctk.CTk):
         self.updated_label: ctk.CTkLabel | None = None
         self.status_label: ctk.CTkLabel | None = None
         self.topmost_button: ctk.CTkButton | None = None
-        self.interval_buttons: dict[int, ctk.CTkButton] = {}
+        self.refresh_mode_button: ctk.CTkButton | None = None
 
         self._build_layout()
+        self._sync_topmost_button()
+        self._sync_refresh_mode_button()
         self.bind("<F5>", lambda _event: self.request_refresh(immediate=True))
         self.after(120, lambda: self.request_refresh(immediate=True))
         self.after(125, self._poll_scan_future)
@@ -115,36 +139,61 @@ class EasyLocalhostApp(ctk.CTk):
         shell.grid_columnconfigure(0, weight=1)
         shell.grid_rowconfigure(2, weight=1)
 
-        header = ctk.CTkFrame(shell, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew", padx=20, pady=(20, 12))
+        hero = ctk.CTkFrame(
+            shell,
+            fg_color=SURFACE,
+            corner_radius=32,
+            border_width=1,
+            border_color=BORDER_STRONG,
+        )
+        hero.grid(row=0, column=0, sticky="ew", padx=18, pady=(18, 12))
+        hero.grid_columnconfigure(0, weight=1)
+
+        header = ctk.CTkFrame(hero, fg_color="transparent")
+        header.grid(row=0, column=0, sticky="ew", padx=18, pady=18)
         header.grid_columnconfigure(1, weight=1)
 
         if self.brand_icon is not None:
             icon_label = ctk.CTkLabel(header, text="", image=self.brand_icon)
-            icon_label.grid(row=0, column=0, rowspan=3, sticky="w", padx=(0, 12))
+            icon_label.grid(row=0, column=0, rowspan=3, sticky="w", padx=(0, 14))
+
+        meta_line = ctk.CTkFrame(header, fg_color="transparent")
+        meta_line.grid(row=0, column=1, sticky="w")
 
         eyebrow = ctk.CTkLabel(
-            header,
+            meta_line,
             text="LOCALHOST CONTROL",
             text_color=ACCENT,
             font=("Segoe UI Semibold", 11),
             anchor="w",
         )
-        eyebrow.grid(row=0, column=1, sticky="w")
+        eyebrow.grid(row=0, column=0, sticky="w")
+
+        version_chip = ctk.CTkLabel(
+            meta_line,
+            text=f"v{APP_VERSION}",
+            text_color=ACCENT,
+            fg_color=ACCENT_DEEP,
+            corner_radius=12,
+            padx=10,
+            pady=4,
+            font=("Segoe UI Semibold", 10),
+        )
+        version_chip.grid(row=0, column=1, sticky="w", padx=(8, 0))
 
         title_label = ctk.CTkLabel(
             header,
-            text=APP_NAME,
+            text=APP_DISPLAY_NAME,
             text_color=TEXT,
-            font=("Segoe UI Semibold", 29),
+            font=("Segoe UI Semibold", 28),
             anchor="w",
         )
-        title_label.grid(row=1, column=1, sticky="w", pady=(0, 1))
+        title_label.grid(row=1, column=1, sticky="w", pady=(2, 0))
 
         subtitle = ctk.CTkLabel(
             header,
-            text="Grouped folders, stable scroll, manual control.",
-            text_color=TEXT_MUTED,
+            text="Compact control for localhost sessions.",
+            text_color=TEXT_SOFT,
             font=("Segoe UI", 13),
             anchor="w",
         )
@@ -155,36 +204,61 @@ class EasyLocalhostApp(ctk.CTk):
         for column in range(2):
             actions.grid_columnconfigure(column, weight=1)
 
-        self.topmost_button = self._make_header_button(
+        self.topmost_button = self._make_button(
             actions,
-            "Pinned",
-            0,
-            self.toggle_topmost,
-            active=True,
+            text="Pinned",
+            row=0,
+            column=0,
+            command=self.toggle_topmost,
+            variant="primary",
         )
-        self._make_header_button(
+        self._make_button(
             actions,
-            "Reload",
-            1,
-            lambda: self.request_refresh(immediate=True),
+            text="Reload",
+            row=0,
+            column=1,
+            command=lambda: self.request_refresh(immediate=True),
+            variant="secondary",
         )
-
-        for index, interval_ms in enumerate(REFRESH_PRESETS_MS):
-            button = self._make_interval_button(actions, interval_ms, index)
-            self.interval_buttons[interval_ms] = button
-        self._sync_interval_buttons()
-
-        self._make_compact_button(actions, "Expand all", 0, self.expand_all_groups)
-        self._make_compact_button(actions, "Collapse all", 1, self.collapse_all_groups)
+        self.refresh_mode_button = self._make_button(
+            actions,
+            text=self.app_state.refresh_button_text,
+            row=1,
+            column=0,
+            columnspan=2,
+            command=self.cycle_refresh_mode,
+            variant="accent",
+            height=34,
+        )
+        self._make_button(
+            actions,
+            text="Expand all",
+            row=2,
+            column=0,
+            command=self.expand_all_groups,
+            variant="ghost",
+            height=30,
+            font_size=10,
+        )
+        self._make_button(
+            actions,
+            text="Collapse all",
+            row=2,
+            column=1,
+            command=self.collapse_all_groups,
+            variant="ghost",
+            height=30,
+            font_size=10,
+        )
 
         summary = ctk.CTkFrame(
             shell,
-            fg_color=SURFACE,
-            corner_radius=28,
+            fg_color=SURFACE_ELEVATED,
+            corner_radius=24,
             border_width=1,
-            border_color=BORDER_STRONG,
+            border_color=BORDER,
         )
-        summary.grid(row=1, column=0, sticky="ew", padx=20)
+        summary.grid(row=1, column=0, sticky="ew", padx=18)
         summary.grid_columnconfigure(0, weight=1)
 
         self.summary_label = ctk.CTkLabel(
@@ -192,7 +266,7 @@ class EasyLocalhostApp(ctk.CTk):
             text="Scanning localhost ports...",
             text_color=TEXT,
             font=("Segoe UI Semibold", 14),
-            padx=17,
+            padx=16,
             pady=14,
             anchor="w",
         )
@@ -203,7 +277,7 @@ class EasyLocalhostApp(ctk.CTk):
             text="Waiting",
             text_color=TEXT_MUTED,
             font=("Segoe UI", 12),
-            padx=17,
+            padx=16,
             pady=14,
             anchor="e",
         )
@@ -213,20 +287,20 @@ class EasyLocalhostApp(ctk.CTk):
             shell,
             fg_color="transparent",
             corner_radius=0,
-            scrollbar_button_color=ACCENT_DEEP,
-            scrollbar_button_hover_color=BORDER_STRONG,
+            scrollbar_button_color=SURFACE_TINT,
+            scrollbar_button_hover_color=ACCENT,
         )
-        self.port_cards_frame.grid(row=2, column=0, sticky="nsew", padx=20, pady=(14, 14))
+        self.port_cards_frame.grid(row=2, column=0, sticky="nsew", padx=18, pady=(14, 14))
         self.port_cards_frame.grid_columnconfigure(0, weight=1)
 
         footer = ctk.CTkFrame(
             shell,
-            fg_color=SURFACE_CARD,
+            fg_color=SURFACE,
             corner_radius=22,
             border_width=1,
             border_color=BORDER,
         )
-        footer.grid(row=3, column=0, sticky="ew", padx=20, pady=(0, 20))
+        footer.grid(row=3, column=0, sticky="ew", padx=18, pady=(0, 18))
         footer.grid_columnconfigure(0, weight=1)
 
         self.status_label = ctk.CTkLabel(
@@ -236,110 +310,103 @@ class EasyLocalhostApp(ctk.CTk):
             font=("Segoe UI", 12),
             anchor="w",
             padx=14,
-            pady=11,
+            pady=10,
         )
         self.status_label.grid(row=0, column=0, sticky="ew")
 
-    def _make_header_button(
+    def _make_button(
         self,
-        parent: ctk.CTkFrame,
+        parent,
         text: str,
+        row: int,
         column: int,
         command,
         *,
-        active: bool = False,
+        variant: str = "secondary",
+        width: int = 90,
+        height: int = 36,
+        corner_radius: int = 18,
+        columnspan: int = 1,
+        font_size: int = 11,
     ) -> ctk.CTkButton:
+        fg_color, hover_color, border_color, text_color = _button_colors(variant)
         button = ctk.CTkButton(
             parent,
             text=text,
-            width=86,
-            height=35,
-            corner_radius=18,
-            fg_color=ACCENT if active else SURFACE_CARD,
-            hover_color=HOVER_WARM if active else SURFACE_CARD_ALT,
+            width=width,
+            height=height,
+            corner_radius=corner_radius,
+            fg_color=fg_color,
+            hover_color=hover_color,
             border_width=1,
-            border_color=ACCENT if active else BORDER,
-            text_color=CANVAS if active else TEXT_SOFT,
-            font=("Segoe UI Semibold", 12),
+            border_color=border_color,
+            text_color=text_color,
+            font=("Segoe UI Semibold", font_size),
             command=command,
         )
-        button.grid(row=0, column=column, sticky="ew", padx=(0 if column == 0 else 8, 0))
+        button.grid(
+            row=row,
+            column=column,
+            columnspan=columnspan,
+            sticky="ew",
+            padx=(0 if column == 0 else 8, 0),
+            pady=(0 if row == 0 else 8, 0),
+        )
         return button
 
-    def _make_interval_button(
-        self,
-        parent: ctk.CTkFrame,
-        interval_ms: int,
-        column: int,
-    ) -> ctk.CTkButton:
-        button = ctk.CTkButton(
-            parent,
-            text=f"{interval_ms // 1000}s",
-            width=86,
-            height=30,
-            corner_radius=15,
-            fg_color=SURFACE_CARD,
-            hover_color=SURFACE_CARD_ALT,
-            border_width=1,
-            border_color=BORDER,
-            text_color=TEXT_SOFT,
-            font=("Segoe UI Semibold", 11),
-            command=lambda: self.set_refresh_interval(interval_ms),
-        )
-        button.grid(row=1, column=column, sticky="ew", padx=(0 if column == 0 else 8, 0), pady=(8, 0))
-        return button
+    def _sync_topmost_button(self) -> None:
+        if not self.topmost_button:
+            return
 
-    def _make_compact_button(
-        self,
-        parent: ctk.CTkFrame,
-        text: str,
-        column: int,
-        command,
-    ) -> ctk.CTkButton:
-        button = ctk.CTkButton(
-            parent,
-            text=text,
-            width=86,
-            height=29,
-            corner_radius=15,
-            fg_color=ACCENT_DEEP,
-            hover_color=ACCENT_MAUVE,
-            border_width=1,
-            border_color=ACCENT_AQUA,
-            text_color=TEXT_SOFT,
-            font=("Segoe UI Semibold", 10),
-            command=command,
+        variant = "primary" if self.app_state.always_on_top else "secondary"
+        fg_color, hover_color, border_color, text_color = _button_colors(variant)
+        self.topmost_button.configure(
+            text="Pinned" if self.app_state.always_on_top else "Unpinned",
+            fg_color=fg_color,
+            hover_color=hover_color,
+            border_color=border_color,
+            text_color=text_color,
         )
-        button.grid(row=2, column=column, sticky="ew", padx=(0 if column == 0 else 8, 0), pady=(8, 0))
-        return button
+
+    def _sync_refresh_mode_button(self) -> None:
+        if not self.refresh_mode_button:
+            return
+
+        variant = "primary" if self.app_state.refresh_mode is RefreshMode.AUTO else "accent"
+        if self.app_state.refresh_mode is RefreshMode.MANUAL:
+            variant = "secondary"
+
+        fg_color, hover_color, border_color, text_color = _button_colors(variant)
+        self.refresh_mode_button.configure(
+            text=self.app_state.refresh_button_text,
+            fg_color=fg_color,
+            hover_color=hover_color,
+            border_color=border_color,
+            text_color=text_color,
+        )
 
     def toggle_topmost(self) -> None:
         self.app_state.always_on_top = not self.app_state.always_on_top
         self.attributes("-topmost", self.app_state.always_on_top)
-        if self.topmost_button:
-            self.topmost_button.configure(
-                text="Pinned" if self.app_state.always_on_top else "Unpinned",
-                fg_color=ACCENT if self.app_state.always_on_top else SURFACE_CARD,
-                hover_color=HOVER_WARM if self.app_state.always_on_top else SURFACE_CARD_ALT,
-                border_color=ACCENT if self.app_state.always_on_top else BORDER,
-                text_color=CANVAS if self.app_state.always_on_top else TEXT_SOFT,
-            )
+        self._sync_topmost_button()
+        self._set_status(
+            "Window pinned to top." if self.app_state.always_on_top else "Window unpinned from top."
+        )
 
-    def set_refresh_interval(self, interval_ms: int) -> None:
-        self.app_state.scan_interval_ms = interval_ms
-        self._sync_interval_buttons()
+    def cycle_refresh_mode(self) -> None:
+        self.app_state.refresh_mode = next_refresh_mode(self.app_state.refresh_mode)
+        self._sync_refresh_mode_button()
+
+        if self.refresh_job is not None:
+            self.after_cancel(self.refresh_job)
+            self.refresh_job = None
+
+        if self.app_state.refresh_mode is RefreshMode.MANUAL:
+            self._set_status("Refresh mode set to Manual. Use Reload to scan.")
+            return
+
         self._queue_next_refresh(force=True)
-        self._set_status(f"Auto refresh set to {interval_ms // 1000}s.")
-
-    def _sync_interval_buttons(self) -> None:
-        for interval_ms, button in self.interval_buttons.items():
-            active = interval_ms == self.app_state.scan_interval_ms
-            button.configure(
-                fg_color=ACCENT if active else SURFACE_CARD,
-                hover_color=HOVER_WARM if active else SURFACE_CARD_ALT,
-                border_color=ACCENT if active else BORDER,
-                text_color=CANVAS if active else TEXT_SOFT,
-            )
+        self._set_status(f"Refresh mode set to {self.app_state.refresh_status_text}.")
 
     def expand_all_groups(self) -> None:
         groups = self._group_ports(self.app_state.ports)
@@ -386,10 +453,18 @@ class EasyLocalhostApp(ctk.CTk):
         self.after(120, self._poll_scan_future)
 
     def _queue_next_refresh(self, force: bool = False) -> None:
-        delay = 250 if force else self.app_state.scan_interval_ms
         if self.refresh_job is not None:
             self.after_cancel(self.refresh_job)
-        self.refresh_job = self.after(delay, self.request_refresh)
+            self.refresh_job = None
+
+        if force:
+            self.refresh_job = self.after(250, self.request_refresh)
+            return
+
+        if self.app_state.scan_interval_ms is None:
+            return
+
+        self.refresh_job = self.after(self.app_state.scan_interval_ms, self.request_refresh)
 
     def _apply_scan_result(self, result: ScanResult) -> None:
         ordered_ports = sorted(result.ports, key=_port_sort_key)
@@ -421,10 +496,10 @@ class EasyLocalhostApp(ctk.CTk):
         if ordered_ports:
             self._set_status(
                 f"Watching {len(ordered_ports)} ports in {len(groups)} folders. "
-                f"Auto refresh: {self.app_state.scan_interval_ms // 1000}s."
+                f"Refresh: {self.app_state.refresh_status_text}."
             )
         else:
-            self._set_status("No localhost processes detected.")
+            self._set_status(f"No localhost processes detected. Refresh: {self.app_state.refresh_status_text}.")
 
     def _group_ports(self, ports: list[PortInfo]) -> list[PortGroupData]:
         groups: dict[str, PortGroupData] = {}
@@ -459,11 +534,11 @@ class EasyLocalhostApp(ctk.CTk):
         )
 
     def _expand_new_groups(self, groups: list[PortGroupData]) -> None:
-        for group in groups:
-            if group.key not in self.known_groups:
-                if group.active_count > 0:
-                    self.expanded_groups.add(group.key)
-                self.known_groups.add(group.key)
+        self.expanded_groups, self.known_groups = merge_new_group_expansion(
+            self.expanded_groups,
+            self.known_groups,
+            ((group.key, group.active_count) for group in groups),
+        )
 
     def _groups_signature(
         self,
@@ -513,7 +588,7 @@ class EasyLocalhostApp(ctk.CTk):
                 on_group_folder=self._handle_group_folder,
                 on_close=self._handle_close,
             )
-            group_widget.grid(row=row_index, column=0, sticky="ew", pady=(0, 12))
+            group_widget.grid(row=row_index, column=0, sticky="ew", pady=(0, 10))
 
         if restore_scroll is not None:
             self.after(40, lambda: self._restore_scroll_position(restore_scroll))
@@ -541,17 +616,17 @@ class EasyLocalhostApp(ctk.CTk):
             text_color=TEXT,
             font=("Segoe UI Semibold", 19),
         )
-        title.grid(row=0, column=0, pady=(28, 8), padx=20)
+        title.grid(row=0, column=0, pady=(24, 8), padx=20)
 
         detail = ctk.CTkLabel(
             frame,
             text="Launch a local dev server and it will appear here automatically.",
             text_color=TEXT_MUTED,
             font=("Segoe UI", 13),
-            wraplength=340,
+            wraplength=360,
             justify="center",
         )
-        detail.grid(row=1, column=0, pady=(0, 28), padx=20)
+        detail.grid(row=1, column=0, pady=(0, 24), padx=20)
         return frame
 
     def _handle_open(self, port_info: PortInfo) -> None:
@@ -590,9 +665,9 @@ class EasyLocalhostApp(ctk.CTk):
             self.status_label.configure(text=text)
 
     def _default_geometry(self) -> str:
-        width = 520
-        height = 720
-        margin = 26
+        width = 580
+        height = 760
+        margin = 24
         x = max(self.winfo_screenwidth() - width - margin, margin)
         y = margin
         return f"{width}x{height}+{x}+{y}"
@@ -622,7 +697,7 @@ class EasyLocalhostApp(ctk.CTk):
     def _load_brand_icon(self) -> ctk.CTkImage | None:
         try:
             image = Image.open(get_icon_path("png"))
-            return ctk.CTkImage(light_image=image, dark_image=image, size=(46, 46))
+            return ctk.CTkImage(light_image=image, dark_image=image, size=(42, 42))
         except Exception as exc:
             logger.debug("Could not load brand icon: %s", exc)
             return None
@@ -651,86 +726,126 @@ class PortGroup(ctk.CTkFrame):
         on_group_folder,
         on_close,
     ) -> None:
+        border_color = ACCENT if expanded and group.active_count > 0 else BORDER_STRONG if expanded else BORDER
         super().__init__(
             master,
-            fg_color=SURFACE_CARD,
-            corner_radius=30,
+            fg_color=SURFACE_CARD if expanded else SURFACE_ELEVATED,
+            corner_radius=28,
             border_width=1,
-            border_color=BORDER_STRONG if expanded else BORDER,
+            border_color=border_color,
         )
         self.grid_columnconfigure(0, weight=1)
 
         header = ctk.CTkFrame(self, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew", padx=16, pady=(14, 12))
+        header.grid(row=0, column=0, sticky="ew", padx=14, pady=(12, 12))
         header.grid_columnconfigure(1, weight=1)
 
-        toggle = ctk.CTkButton(
+        toggle_pill = ctk.CTkFrame(
             header,
-            text="-" if expanded else "+",
+            fg_color=ACCENT_DEEP if group.active_count > 0 else SURFACE_ROW,
+            corner_radius=15,
+            border_width=1,
+            border_color=ACCENT if expanded and group.active_count > 0 else BORDER_STRONG,
             width=34,
             height=34,
-            corner_radius=17,
-            fg_color=ACCENT if expanded else SURFACE_RAISED,
-            hover_color=HOVER_WARM,
-            text_color=CANVAS if expanded else TEXT_SOFT,
-            command=lambda: on_toggle(group.key),
         )
-        toggle.grid(row=0, column=0, sticky="w", padx=(0, 10))
+        toggle_pill.grid(row=0, column=0, sticky="w", padx=(0, 10))
+        toggle_pill.grid_propagate(False)
 
-        title_block = ctk.CTkFrame(header, fg_color="transparent")
-        title_block.grid(row=0, column=1, sticky="ew")
-        title_block.grid_columnconfigure(0, weight=1)
+        toggle_icon = ctk.CTkLabel(
+            toggle_pill,
+            text="▾" if expanded else "▸",
+            text_color=ACCENT if group.active_count > 0 else TEXT_SOFT,
+            font=("Segoe UI Semibold", 15),
+        )
+        toggle_icon.place(relx=0.5, rely=0.5, anchor="center")
+
+        info = ctk.CTkFrame(header, fg_color="transparent")
+        info.grid(row=0, column=1, sticky="ew")
+        info.grid_columnconfigure(0, weight=1)
+
+        top_line = ctk.CTkFrame(info, fg_color="transparent")
+        top_line.grid(row=0, column=0, sticky="ew")
+        top_line.grid_columnconfigure(0, weight=1)
 
         title = ctk.CTkLabel(
-            title_block,
+            top_line,
             text=group.title,
             text_color=TEXT,
             font=("Segoe UI Semibold", 16),
             anchor="w",
         )
-        title.grid(row=0, column=0, sticky="ew")
+        title.grid(row=0, column=0, sticky="w")
+
+        stats = ctk.CTkLabel(
+            top_line,
+            text=f"{len(group.ports)} localhost | {group.active_count} active",
+            text_color=ACCENT if group.active_count > 0 else TEXT_SOFT,
+            fg_color=ACCENT_DEEP if group.active_count > 0 else SURFACE_ROW,
+            corner_radius=14,
+            font=("Segoe UI Semibold", 10),
+            padx=10,
+            pady=5,
+        )
+        stats.grid(row=0, column=1, sticky="e", padx=(10, 0))
+
+        detail_line = ctk.CTkFrame(info, fg_color="transparent")
+        detail_line.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+        detail_line.grid_columnconfigure(0, weight=1)
 
         path_label = ctk.CTkLabel(
-            title_block,
-            text=truncate_path(group.path, 58) if group.path else "No folder resolved",
+            detail_line,
+            text=truncate_path(group.path, 56) if group.path else "No folder resolved",
             text_color=TEXT_MUTED,
             font=("Segoe UI", 12),
             anchor="w",
         )
-        path_label.grid(row=1, column=0, sticky="ew", pady=(2, 0))
+        path_label.grid(row=0, column=0, sticky="w")
 
-        stats = ctk.CTkLabel(
-            header,
-            text=f"{len(group.ports)} ports / {group.active_count} active",
-            text_color=ACCENT,
-            fg_color=ACCENT_DEEP,
-            corner_radius=15,
-            font=("Segoe UI Semibold", 11),
-            padx=10,
-            pady=6,
-        )
-        stats.grid(row=0, column=2, sticky="e", padx=(10, 8))
+        chips = ctk.CTkFrame(detail_line, fg_color="transparent")
+        chips.grid(row=0, column=1, sticky="e", padx=(10, 0))
 
+        chip_widgets = []
+        for index, port in enumerate(group.ports[:3]):
+            chip = ctk.CTkLabel(
+                chips,
+                text=f":{port.port}",
+                text_color=_port_chip_text(port.status),
+                fg_color=_port_chip_background(port.status),
+                corner_radius=11,
+                font=("Consolas", 10, "bold"),
+                padx=8,
+                pady=4,
+            )
+            chip.grid(row=0, column=index, sticky="e", padx=(6 if index else 0, 0))
+            chip_widgets.append(chip)
+
+        folder_fg, folder_hover, folder_border, folder_text = _button_colors("ghost")
         folder_button = ctk.CTkButton(
             header,
             text="Folder",
-            width=70,
+            width=74,
             height=32,
             corner_radius=16,
-            fg_color=SURFACE_RAISED,
-            hover_color=SURFACE_CARD_ALT,
+            fg_color=folder_fg,
+            hover_color=folder_hover,
             border_width=1,
-            border_color=BORDER,
-            text_color=TEXT_SOFT,
+            border_color=folder_border,
+            text_color=folder_text,
             font=("Segoe UI Semibold", 11),
             command=lambda: on_group_folder(group.path),
             state="normal" if group.path else "disabled",
         )
-        folder_button.grid(row=0, column=3, sticky="e")
+        folder_button.grid(row=0, column=2, sticky="e", padx=(12, 0))
+
+        _bind_left_click(
+            [header, toggle_pill, toggle_icon, info, top_line, title, stats, detail_line, path_label, chips, *chip_widgets],
+            lambda: on_toggle(group.key),
+        )
 
         if expanded:
             body = ctk.CTkFrame(self, fg_color="transparent")
-            body.grid(row=1, column=0, sticky="ew", padx=12, pady=(0, 12))
+            body.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 10))
             body.grid_columnconfigure(0, weight=1)
 
             for row_index, port in enumerate(group.ports):
@@ -747,7 +862,7 @@ class PortGroup(ctk.CTkFrame):
 
 
 class PortCard(ctk.CTkFrame):
-    """Single compact card representing one localhost process."""
+    """Single compact row representing one localhost process."""
 
     def __init__(
         self,
@@ -760,13 +875,13 @@ class PortCard(ctk.CTkFrame):
         on_close,
     ) -> None:
         status_label, status_color, status_surface = STATUS_META[port_info.status]
-        row_color = ROW_A if row_index % 2 == 0 else ROW_B
+        row_color = SURFACE_ROW if row_index % 2 == 0 else SURFACE_ROW_ALT
         super().__init__(
             master,
             fg_color=row_color,
-            corner_radius=18,
+            corner_radius=20,
             border_width=1,
-            border_color=status_color,
+            border_color=BORDER,
         )
 
         self.grid_columnconfigure(1, weight=1)
@@ -774,24 +889,32 @@ class PortCard(ctk.CTkFrame):
 
         status_bar = ctk.CTkFrame(
             self,
-            width=7,
-            corner_radius=7,
+            width=5,
+            corner_radius=4,
             fg_color=status_color,
         )
-        status_bar.grid(row=0, column=0, rowspan=5, sticky="nsw", padx=(9, 0), pady=9)
+        status_bar.grid(row=0, column=0, rowspan=5, sticky="nsw", padx=(9, 0), pady=10)
         status_bar.grid_propagate(False)
 
-        port_badge = ctk.CTkLabel(
+        port_badge = ctk.CTkFrame(
             self,
+            fg_color=SURFACE_ELEVATED,
+            corner_radius=17,
+            border_width=1,
+            border_color=status_color,
+        )
+        port_badge.grid(row=0, column=1, sticky="w", padx=(16, 10), pady=(11, 4))
+
+        port_badge_label = ctk.CTkLabel(
+            port_badge,
             text=f":{port_info.port}",
-            text_color=CANVAS,
-            fg_color=ACCENT,
-            corner_radius=18,
+            text_color=TEXT,
+            fg_color="transparent",
             font=("Consolas", 18, "bold"),
             padx=12,
-            pady=8,
+            pady=7,
         )
-        port_badge.grid(row=0, column=1, sticky="w", padx=(18, 10), pady=(11, 4))
+        port_badge_label.grid(row=0, column=0)
 
         status_badge = ctk.CTkFrame(
             self,
@@ -820,7 +943,7 @@ class PortCard(ctk.CTkFrame):
             font=("Segoe UI Semibold", 15),
             anchor="w",
         )
-        process_line.grid(row=1, column=1, columnspan=2, sticky="ew", padx=(18, 12))
+        process_line.grid(row=1, column=1, columnspan=2, sticky="ew", padx=(16, 12))
 
         details = self._build_runtime_text(port_info)
         detail_line = ctk.CTkLabel(
@@ -830,66 +953,32 @@ class PortCard(ctk.CTkFrame):
             font=("Segoe UI", 12),
             anchor="w",
         )
-        detail_line.grid(row=2, column=1, columnspan=2, sticky="ew", padx=(18, 12), pady=(1, 5))
+        detail_line.grid(row=2, column=1, columnspan=2, sticky="ew", padx=(16, 12), pady=(2, 5))
 
         path_line = ctk.CTkLabel(
             self,
-            text=truncate_path(port_info.launch_path or port_info.cwd or port_info.exe_path, 64)
+            text=truncate_path(port_info.launch_path or port_info.cwd or port_info.exe_path, 68)
             or "No source path resolved",
             text_color=TEXT_MUTED,
             font=("Segoe UI", 11),
             anchor="w",
             justify="left",
-            wraplength=430,
+            wraplength=440,
         )
-        path_line.grid(row=3, column=1, columnspan=2, sticky="ew", padx=(18, 12), pady=(0, 9))
+        path_line.grid(row=3, column=1, columnspan=2, sticky="ew", padx=(16, 12), pady=(0, 9))
 
         commands = ctk.CTkFrame(self, fg_color="transparent")
-        commands.grid(row=4, column=1, columnspan=2, sticky="ew", padx=(18, 12), pady=(0, 11))
+        commands.grid(row=4, column=1, columnspan=2, sticky="ew", padx=(16, 12), pady=(0, 11))
         for index in range(4):
             commands.grid_columnconfigure(index, weight=1)
 
-        self._make_button(commands, "Open", 0, lambda: on_open(port_info), filled=True)
-        self._make_button(commands, "Copy", 1, lambda: on_copy(port_info), color="aqua")
-        self._make_button(commands, "Source", 2, lambda: on_folder(port_info), color="sage")
-        self._make_button(commands, "Close", 3, lambda: on_close(port_info), danger=True)
+        self._make_button(commands, "Open", 0, lambda: on_open(port_info), "primary")
+        self._make_button(commands, "Copy", 1, lambda: on_copy(port_info), "ghost")
+        self._make_button(commands, "Source", 2, lambda: on_folder(port_info), "ghost")
+        self._make_button(commands, "Close", 3, lambda: on_close(port_info), "danger")
 
-    def _make_button(
-        self,
-        parent,
-        text: str,
-        column: int,
-        command,
-        *,
-        filled: bool = False,
-        danger: bool = False,
-        color: str = "default",
-    ) -> None:
-        fg_color = SURFACE_CARD_ALT
-        hover_color = ACCENT_MAUVE
-        border_color = ACCENT_AQUA
-        text_color = TEXT_SOFT
-        if filled:
-            fg_color = ACCENT
-            hover_color = HOVER_WARM
-            border_color = ACCENT
-            text_color = CANVAS
-        elif color == "aqua":
-            fg_color = ACCENT_SAGE
-            hover_color = ACCENT_AQUA
-            border_color = ACCENT_AQUA
-            text_color = TEXT_SOFT
-        elif color == "sage":
-            fg_color = SURFACE_RAISED
-            hover_color = ACCENT_SAGE
-            border_color = ACCENT_SAGE
-            text_color = TEXT_SOFT
-        if danger:
-            fg_color = DANGER_DEEP
-            hover_color = DANGER
-            border_color = DANGER
-            text_color = "#FDE8D3"
-
+    def _make_button(self, parent, text: str, column: int, command, variant: str) -> None:
+        fg_color, hover_color, border_color, text_color = _button_colors(variant)
         button = ctk.CTkButton(
             parent,
             text=text,
@@ -909,7 +998,16 @@ class PortCard(ctk.CTkFrame):
         details = [f"PID {port_info.pid}", port_info.status.value]
         if port_info.http_status_code:
             details.append(f"HTTP {port_info.http_status_code}")
-        return " / ".join(details)
+        return " | ".join(details)
+
+
+def _port_chip_background(status: PortStatus) -> str:
+    return STATUS_META[status][2]
+
+
+def _port_chip_text(status: PortStatus) -> str:
+    return STATUS_META[status][1]
+
 
 def _group_path(port_info: PortInfo) -> str:
     path = port_info.project_root or port_info.cwd or port_info.exe_path
@@ -927,7 +1025,7 @@ def _group_title(port_info: PortInfo, group_path: str) -> str:
         return port_info.project_name
     if group_path:
         return os.path.basename(group_path) or group_path
-    return port_info.process_name or "Unknown"
+    return port_info.process_name or APP_NAME
 
 
 def _port_sort_key(port_info: PortInfo) -> tuple[int, str, int]:

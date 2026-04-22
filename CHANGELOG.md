@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.0.0
+
+- Rebranded the app as Easy Localhost v3 and aligned the UI, README, executable metadata, and release versioning.
+- Rebuilt the desktop interface around a graphite and lime visual system with cleaner spacing, sharper borders, and more restrained action colors.
+- Replaced the old icon with a new monogram `EL` mark used in the window, header, executable, and release assets.
+- Added a single-cycle refresh control that rotates through `Auto`, `10s`, `5s`, and `Manual`.
+- Added a `RefreshMode` model with test coverage for cycle order and interval behavior.
+- Redesigned folder groups so collapsed projects stay compact, show summary chips, and can be expanded by clicking the whole header.
+- Added pure presentation-state helpers with tests for default expansion and compact port summaries.
+- Added Windows version metadata to the PyInstaller build and documented the SmartScreen limitation more precisely.
+- Added a v3 UI preview image for public docs and release notes.
+
 ## 1.2.1
 
 - Reworked the process display into high-contrast rows so ports and processes are immediately visible.

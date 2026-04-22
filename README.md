@@ -1,9 +1,10 @@
-# Easy Localhost
+# Easy Localhost v3
 
-Easy Localhost is a compact Windows desktop controller for local development servers.
-It keeps a live view of the localhost ports you actually care about, shows which project they belong to, and lets you act on them without dropping to terminal commands.
+Easy Localhost v3 is a compact Windows desktop controller for local development servers. It keeps a live view of the localhost ports you actually care about, groups them by project folder, shows which ones are healthy, and lets you act on them without dropping to terminal commands.
 
-The interface is intentionally small, dark, and premium: pure black background, cacao/arena earth tones, rounded panels, high-contrast process rows, and one consistent app icon across the window, executable, and release asset.
+The v3 refresh introduces a darker graphite UI, a cleaner monogram icon, compact collapsible folder summaries, a single-cycle refresh control, and a more consistent portable Windows build with executable version metadata.
+
+![Easy Localhost v3 preview](docs/preview-v3.png)
 
 ## What It Solves
 
@@ -15,18 +16,19 @@ When you work with multiple repos, AI coding tools, IIS Express, `npm run dev`, 
 - how to open it quickly
 - how to close it cleanly
 
-Easy Localhost gives you a small always-on-top panel focused only on that.
+Easy Localhost keeps that focused in a small always-on-top panel built only for localhost process control.
 
 ## Features
 
 - Live localhost monitoring with low overhead
 - Compact floating Windows UI designed to stay visible in a screen corner
-- Premium black visual system with cacao, sand, warm brown, and soft aqua accents
-- Shared app icon embedded in the executable and used inside the UI
-- Collapsible grouping by project/folder so large localhost sessions stay manageable
-- High-contrast process rows with large port labels and visible status bars
+- Graphite and lime visual system with pure black background and sharper hierarchy
+- Shared monogram `EL` app icon embedded in the UI, executable, and release assets
+- Collapsible grouping by project or folder with compact summary rows
+- Clickable group headers to expand or collapse folders quickly
+- Up to three visible port chips on collapsed folders for fast scanning
 - Stable scroll behavior during refreshes
-- Manual reload plus configurable auto-refresh presets of 5s and 10s
+- Manual reload plus a single refresh button that cycles through `Auto`, `10s`, `5s`, and `Manual`
 - Automatic project detection from Git roots, `package.json`, and common project markers
 - HTTP health probing to distinguish active servers from plain listeners
 - One-click actions per entry:
@@ -34,6 +36,7 @@ Easy Localhost gives you a small always-on-top panel focused only on that.
   - `Copy` localhost URL
   - `Source` open the project folder in Explorer
   - `Close` terminate the owning process tree
+- Portable `EasyLocalhost.exe` build with Windows version metadata
 - No backend service
 - No installation required for the built app
 - No external network calls
@@ -80,7 +83,16 @@ dist\EasyLocalhost.exe
 
 ## Windows SmartScreen
 
-The portable EXE is unsigned. Microsoft SmartScreen may show a warning for new unsigned apps until the file builds reputation or is code-signed with a paid certificate. This is normal for independent open-source Windows binaries and cannot be fully eliminated from code alone.
+The portable EXE is unsigned. Microsoft SmartScreen can still warn for a new unsigned application, even when the code is clean. That warning cannot be honestly eliminated from code alone.
+
+What v3 does improve:
+
+- consistent executable icon
+- Windows version metadata
+- public SHA256 hash in each release
+- reproducible public build inputs in the repo
+
+To eliminate SmartScreen warnings consistently, you need a trusted code-signing certificate or an external signing service.
 
 For verification, compare the SHA256 hash published in each GitHub Release with the downloaded file:
 
@@ -102,33 +114,25 @@ python -m bandit -r src -q
 python -m pip_audit -r requirements.txt
 ```
 
-## Release Automation
-
-This repo includes a GitHub Actions workflow that can be triggered manually to:
-
-- runs tests on Windows
-- runs static security checks
-- audits Python dependencies
-- builds the portable executable
-- uploads the executable as an artifact
-- can publish the executable to a GitHub Release when you run it against a tagged commit
-
 ## Project Structure
 
 ```text
 assets/                  App icon assets
+docs/                    Preview images used in docs and releases
 src/
   actions.py            Safe user actions for localhost entries
   app.py                Desktop UI
   controller.py         Monitor orchestration
   health_checker.py     HTTP probing
-  models.py             Core data models
-  project_mapper.py     Project/repository detection
+  models.py             Core data models and refresh modes
+  presentation_state.py Pure UI-state helpers for grouping and summaries
+  project_mapper.py     Project or repository detection
   scanner.py            Port and process discovery
   utils.py              Shared constants and helpers
 tests/                  Unit tests for core logic
 build.ps1               Local build script
 EasyLocalhost.spec      PyInstaller build definition
+file_version_info.txt   Windows version resource for the portable EXE
 ```
 
 ## Current Scope
@@ -141,7 +145,7 @@ It is not:
 - a local tunnel
 - a traffic inspector
 - a port scanner for external networks
-- a project launcher/orchestrator
+- a project launcher or orchestrator
 - a telemetry collector
 
 ## License

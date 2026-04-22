@@ -9,8 +9,10 @@ import sys
 
 # Application metadata
 APP_NAME = "Easy Localhost"
-APP_VERSION = "1.2.1"
+APP_DISPLAY_NAME = "Easy Localhost v3"
+APP_VERSION = "3.0.0"
 APP_AUTHOR = "Iker"
+APP_EXE_NAME = "EasyLocalhost.exe"
 
 # Default scan interval in milliseconds
 DEFAULT_SCAN_INTERVAL = 7000

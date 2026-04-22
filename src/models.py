@@ -16,6 +16,65 @@ class PortStatus(Enum):
     UNKNOWN = "unknown"         # Could not determine status
 
 
+class RefreshMode(Enum):
+    """Available UI refresh modes for the desktop controller."""
+
+    AUTO = "auto"
+    FIXED_10S = "10s"
+    FIXED_5S = "5s"
+    MANUAL = "manual"
+
+
+_REFRESH_MODE_ORDER = (
+    RefreshMode.AUTO,
+    RefreshMode.FIXED_10S,
+    RefreshMode.FIXED_5S,
+    RefreshMode.MANUAL,
+)
+
+_REFRESH_INTERVALS_MS = {
+    RefreshMode.AUTO: 7000,
+    RefreshMode.FIXED_10S: 10000,
+    RefreshMode.FIXED_5S: 5000,
+    RefreshMode.MANUAL: None,
+}
+
+_REFRESH_BUTTON_LABELS = {
+    RefreshMode.AUTO: "Refresh: Auto",
+    RefreshMode.FIXED_10S: "Refresh: 10s",
+    RefreshMode.FIXED_5S: "Refresh: 5s",
+    RefreshMode.MANUAL: "Refresh: Manual",
+}
+
+_REFRESH_STATUS_LABELS = {
+    RefreshMode.AUTO: "Auto (7s)",
+    RefreshMode.FIXED_10S: "10s",
+    RefreshMode.FIXED_5S: "5s",
+    RefreshMode.MANUAL: "Manual",
+}
+
+
+def next_refresh_mode(mode: RefreshMode) -> RefreshMode:
+    """Cycles through the supported refresh modes in UI order."""
+    index = _REFRESH_MODE_ORDER.index(mode)
+    return _REFRESH_MODE_ORDER[(index + 1) % len(_REFRESH_MODE_ORDER)]
+
+
+def refresh_interval_for_mode(mode: RefreshMode) -> Optional[int]:
+    """Returns the effective refresh interval for the given mode."""
+    return _REFRESH_INTERVALS_MS[mode]
+
+
+def refresh_button_label(mode: RefreshMode) -> str:
+    """Returns the button label shown in the header for the refresh mode."""
+    return _REFRESH_BUTTON_LABELS[mode]
+
+
+def refresh_status_label(mode: RefreshMode) -> str:
+    """Returns the compact status text shown in footer/summary areas."""
+    return _REFRESH_STATUS_LABELS[mode]
+
+
 @dataclass
 class PortInfo:
     """Represents a single monitored localhost port and its associated process."""
@@ -72,7 +131,22 @@ class AppState:
     """Global application state."""
     ports: list[PortInfo] = field(default_factory=list)
     last_scan_time: Optional[float] = None
-    scan_interval_ms: int = 7000
+    refresh_mode: RefreshMode = RefreshMode.AUTO
     is_scanning: bool = False
     always_on_top: bool = True
     total_scans: int = 0
+
+    @property
+    def scan_interval_ms(self) -> Optional[int]:
+        """Returns the active interval in milliseconds, if auto-refresh is enabled."""
+        return refresh_interval_for_mode(self.refresh_mode)
+
+    @property
+    def refresh_button_text(self) -> str:
+        """Returns the header button text for the active refresh mode."""
+        return refresh_button_label(self.refresh_mode)
+
+    @property
+    def refresh_status_text(self) -> str:
+        """Returns the compact footer/status text for the active refresh mode."""
+        return refresh_status_label(self.refresh_mode)
