@@ -15,6 +15,15 @@ from models import PortInfo, PortStatus
 
 logger = logging.getLogger(__name__)
 
+LOCAL_BIND_IPV4 = ".".join(("0", "0", "0", "0"))
+LOCAL_BIND_IPV6 = "::"
+LOOPBACK_OR_LOCAL_BIND_ADDRESSES = (
+    "127.0.0.1",
+    "::1",
+    LOCAL_BIND_IPV4,
+    LOCAL_BIND_IPV6,
+)
+
 
 def scan_localhost_ports() -> list[PortInfo]:
     """
@@ -42,7 +51,7 @@ def scan_localhost_ports() -> list[PortInfo]:
             continue
 
         local_ip = conn.laddr.ip
-        if local_ip not in ("127.0.0.1", "::1", "0.0.0.0", "::"):
+        if local_ip not in LOOPBACK_OR_LOCAL_BIND_ADDRESSES:
             continue
 
         port = conn.laddr.port

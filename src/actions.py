@@ -14,7 +14,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 import os
-import subprocess
 import webbrowser
 from typing import Optional
 
@@ -41,7 +40,13 @@ def open_in_browser(port: int) -> ActionResult:
     try:
         chrome_path = _find_chrome()
         if chrome_path:
-            subprocess.Popen([chrome_path, url], close_fds=True)
+            webbrowser.register(
+                "chrome",
+                None,
+                webbrowser.BackgroundBrowser(chrome_path),
+                preferred=True,
+            )
+            webbrowser.get("chrome").open(url)
         else:
             webbrowser.open(url)
         logger.info("Opened %s", url)
@@ -61,7 +66,8 @@ def open_in_folder(path: str) -> ActionResult:
         return ActionResult(False, "The resolved project folder no longer exists.")
 
     try:
-        os.startfile(target)
+        # The target is validated as an existing local directory above.
+        os.startfile(target)  # nosec B606
         return ActionResult(True, f"Opened {target}")
     except Exception as exc:
         logger.error("Failed to open folder %s: %s", target, exc)

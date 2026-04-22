@@ -7,9 +7,12 @@ which repository or project likely owns a listening localhost process.
 
 import configparser
 import json
+import logging
 import os
 from functools import lru_cache
 from typing import Iterable, Optional
+
+logger = logging.getLogger(__name__)
 
 IGNORED_PATH_SEGMENTS = {
     "node_modules",
@@ -173,8 +176,8 @@ def _check_git_repo(directory: str) -> Optional[str]:
                 repo_name = _extract_repo_name_from_url(url)
                 if repo_name:
                     return repo_name
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to read Git config from %s: %s", config_path, exc)
 
     return os.path.basename(directory)
 

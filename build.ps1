@@ -18,16 +18,23 @@ function Invoke-Step {
 }
 
 Invoke-Step "Installing build dependencies if needed..." {
-    python -m pip install -r requirements.txt
+    python -m pip install -r requirements-dev.txt
 }
 
 Invoke-Step "Running tests..." {
     python -m unittest discover -s tests -v
 }
 
+Invoke-Step "Running static security scan..." {
+    python -m bandit -r src -q
+}
+
+Invoke-Step "Auditing Python dependencies..." {
+    python -m pip_audit -r requirements.txt
+}
+
 if (Test-Path $exePath) {
     Get-Process EasyLocalhost -ErrorAction SilentlyContinue |
-        Where-Object { $_.Path -eq $exePath } |
         ForEach-Object {
             Stop-Process -Id $_.Id -Force
         }

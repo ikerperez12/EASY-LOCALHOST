@@ -75,11 +75,21 @@ dist\EasyLocalhost.exe
 python -m unittest discover -s tests -v
 ```
 
+## Security Checks
+
+```powershell
+python -m pip install -r requirements-dev.txt
+python -m bandit -r src -q
+python -m pip_audit -r requirements.txt
+```
+
 ## Release Automation
 
 This repo includes a GitHub Actions workflow that can be triggered manually to:
 
 - runs tests on Windows
+- runs static security checks
+- audits Python dependencies
 - builds the portable executable
 - uploads the executable as an artifact
 - can publish the executable to a GitHub Release when you run it against a tagged commit
