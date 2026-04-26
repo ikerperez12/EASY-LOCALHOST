@@ -56,6 +56,13 @@ if (-not (Test-Path $exePath)) {
     throw "Build completed without producing $exePath"
 }
 
+$hashPath = "$exePath.sha256"
+$hash = Get-FileHash $exePath -Algorithm SHA256
+"$($hash.Hash)  EasyLocalhost.exe" | Out-File -Encoding ascii $hashPath
+
 Write-Host ""
 Write-Host "Build completed:"
 Write-Host "  $exePath"
+Write-Host "  $hashPath"
+Write-Host "SHA256:"
+Write-Host "  $($hash.Hash)"

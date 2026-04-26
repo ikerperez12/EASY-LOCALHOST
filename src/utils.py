@@ -9,19 +9,20 @@ import sys
 
 # Application metadata
 APP_NAME = "Easy Localhost"
-APP_DISPLAY_NAME = "Easy Localhost v3"
-APP_VERSION = "3.0.0"
+APP_DISPLAY_NAME = "Easy Localhost"
+APP_VERSION = "3.0.1"
 APP_AUTHOR = "Iker"
 APP_EXE_NAME = "EasyLocalhost.exe"
 
 # Default scan interval in milliseconds
 DEFAULT_SCAN_INTERVAL = 7000
 
-# HTTP health check timeout in seconds
-HEALTH_CHECK_TIMEOUT = 1.0
+# HTTP health check timeout in seconds. Local dev servers should answer quickly;
+# slower responses stay visible as listening instead of blocking the UI cycle.
+HEALTH_CHECK_TIMEOUT = 0.45
 
 # Maximum concurrent health checks
-MAX_CONCURRENT_CHECKS = 10
+MAX_CONCURRENT_CHECKS = 24
 
 
 def resource_path(relative_path: str) -> str:

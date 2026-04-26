@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
 from models import PortInfo, PortStatus
-from utils import HEALTH_CHECK_TIMEOUT, MAX_CONCURRENT_CHECKS
+from utils import APP_VERSION, HEALTH_CHECK_TIMEOUT, MAX_CONCURRENT_CHECKS
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ def _check_single_port(port: int) -> tuple[PortStatus, Optional[int]]:
             "HEAD",
             "/",
             headers={
-                "User-Agent": "EasyLocalhost/1.0 HealthCheck",
+                "User-Agent": f"EasyLocalhost/{APP_VERSION} HealthCheck",
                 "Connection": "close",
             },
         )

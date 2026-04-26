@@ -1,10 +1,10 @@
 # UTF-8
 #
-# Windows version resource for Easy Localhost v3.
+# Windows version resource for Easy Localhost.
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(3, 0, 0, 0),
-    prodvers=(3, 0, 0, 0),
+    filevers=(3, 0, 1, 0),
+    prodvers=(3, 0, 1, 0),
     mask=0x3F,
     flags=0x0,
     OS=0x40004,
@@ -18,12 +18,12 @@ VSVersionInfo(
       StringTable(
         '040904B0',
         [StringStruct('CompanyName', 'Iker'),
-        StringStruct('FileDescription', 'Easy Localhost v3'),
-        StringStruct('FileVersion', '3.0.0'),
+        StringStruct('FileDescription', 'Easy Localhost localhost controller'),
+        StringStruct('FileVersion', '3.0.1'),
         StringStruct('InternalName', 'EasyLocalhost'),
         StringStruct('OriginalFilename', 'EasyLocalhost.exe'),
-        StringStruct('ProductName', 'Easy Localhost v3'),
-        StringStruct('ProductVersion', '3.0.0')])
+        StringStruct('ProductName', 'Easy Localhost'),
+        StringStruct('ProductVersion', '3.0.1')])
       ]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])
   ]

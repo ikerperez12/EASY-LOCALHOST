@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.0.1
+
+- Reworked dense list rendering so unchanged folders are reused instead of rebuilt on every refresh.
+- Added batched group rendering to keep expand/collapse and large refreshes responsive.
+- Replaced multi-widget process rows with a lightweight canvas row to reduce UI overhead in sessions with many localhost processes.
+- Added progressive row rendering inside expanded folders so large projects do not freeze the window while rows are created.
+- Deferred automatic list repaints during active scrolling to prevent scroll jumps and stutter.
+- Tuned localhost health probing for dense sessions with shorter local timeouts and higher concurrency.
+- Preserved the graphite/lime direction while making the process list lighter and faster.
+- Added SHA256 generation to local builds and release artifacts.
+
 ## 3.0.0
 
 - Rebranded the app as Easy Localhost v3 and aligned the UI, README, executable metadata, and release versioning.

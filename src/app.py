@@ -9,6 +9,9 @@ from dataclasses import dataclass
 from datetime import datetime
 import logging
 import os
+import tkinter as tk
+import tkinter.font as tkfont
+import time
 from tkinter import messagebox
 
 import customtkinter as ctk
@@ -97,7 +100,7 @@ class EasyLocalhostApp(ctk.CTk):
 
     def __init__(self) -> None:
         super().__init__()
-        self.title(f"{APP_DISPLAY_NAME} - {APP_VERSION}")
+        self.title(f"{APP_DISPLAY_NAME} {APP_VERSION}")
         self.configure(fg_color=CANVAS)
         self.minsize(500, 560)
         self.geometry(self._default_geometry())
@@ -114,6 +117,13 @@ class EasyLocalhostApp(ctk.CTk):
         self.last_signature: tuple[tuple[str, tuple[tuple[int, int, str, int | None], ...]], ...] = ()
         self.expanded_groups: set[str] = set()
         self.known_groups: set[str] = set()
+        self.group_widgets: dict[str, PortGroup] = {}
+        self.empty_state_widget: ctk.CTkFrame | None = None
+        self.pending_render_groups: list[PortGroupData] | None = None
+        self.pending_restore_scroll: float | None = None
+        self.pending_render_defer_while_scrolling = True
+        self.render_job: str | None = None
+        self.scroll_hold_until = 0.0
 
         self.brand_icon = self._load_brand_icon()
         self.port_cards_frame: ctk.CTkScrollableFrame | None = None
@@ -142,15 +152,15 @@ class EasyLocalhostApp(ctk.CTk):
         hero = ctk.CTkFrame(
             shell,
             fg_color=SURFACE,
-            corner_radius=32,
+            corner_radius=26,
             border_width=1,
             border_color=BORDER_STRONG,
         )
-        hero.grid(row=0, column=0, sticky="ew", padx=18, pady=(18, 12))
+        hero.grid(row=0, column=0, sticky="ew", padx=16, pady=(16, 10))
         hero.grid_columnconfigure(0, weight=1)
 
         header = ctk.CTkFrame(hero, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew", padx=18, pady=18)
+        header.grid(row=0, column=0, sticky="ew", padx=16, pady=14)
         header.grid_columnconfigure(1, weight=1)
 
         if self.brand_icon is not None:
@@ -185,19 +195,19 @@ class EasyLocalhostApp(ctk.CTk):
             header,
             text=APP_DISPLAY_NAME,
             text_color=TEXT,
-            font=("Segoe UI Semibold", 28),
+            font=("Segoe UI Semibold", 24),
             anchor="w",
         )
         title_label.grid(row=1, column=1, sticky="w", pady=(2, 0))
 
         subtitle = ctk.CTkLabel(
             header,
-            text="Compact control for localhost sessions.",
+            text="Grouped localhost sessions, fast actions.",
             text_color=TEXT_SOFT,
-            font=("Segoe UI", 13),
+            font=("Segoe UI", 12),
             anchor="w",
         )
-        subtitle.grid(row=2, column=1, sticky="w", pady=(8, 0))
+        subtitle.grid(row=2, column=1, sticky="w", pady=(5, 0))
 
         actions = ctk.CTkFrame(header, fg_color="transparent")
         actions.grid(row=0, column=2, rowspan=3, sticky="e")
@@ -232,7 +242,7 @@ class EasyLocalhostApp(ctk.CTk):
         )
         self._make_button(
             actions,
-            text="Expand all",
+            text="Expand",
             row=2,
             column=0,
             command=self.expand_all_groups,
@@ -242,7 +252,7 @@ class EasyLocalhostApp(ctk.CTk):
         )
         self._make_button(
             actions,
-            text="Collapse all",
+            text="Collapse",
             row=2,
             column=1,
             command=self.collapse_all_groups,
@@ -254,11 +264,11 @@ class EasyLocalhostApp(ctk.CTk):
         summary = ctk.CTkFrame(
             shell,
             fg_color=SURFACE_ELEVATED,
-            corner_radius=24,
+            corner_radius=20,
             border_width=1,
             border_color=BORDER,
         )
-        summary.grid(row=1, column=0, sticky="ew", padx=18)
+        summary.grid(row=1, column=0, sticky="ew", padx=16)
         summary.grid_columnconfigure(0, weight=1)
 
         self.summary_label = ctk.CTkLabel(
@@ -266,8 +276,8 @@ class EasyLocalhostApp(ctk.CTk):
             text="Scanning localhost ports...",
             text_color=TEXT,
             font=("Segoe UI Semibold", 14),
-            padx=16,
-            pady=14,
+            padx=14,
+            pady=11,
             anchor="w",
         )
         self.summary_label.grid(row=0, column=0, sticky="w")
@@ -277,8 +287,8 @@ class EasyLocalhostApp(ctk.CTk):
             text="Waiting",
             text_color=TEXT_MUTED,
             font=("Segoe UI", 12),
-            padx=16,
-            pady=14,
+            padx=14,
+            pady=11,
             anchor="e",
         )
         self.updated_label.grid(row=0, column=1, sticky="e")
@@ -290,17 +300,18 @@ class EasyLocalhostApp(ctk.CTk):
             scrollbar_button_color=SURFACE_TINT,
             scrollbar_button_hover_color=ACCENT,
         )
-        self.port_cards_frame.grid(row=2, column=0, sticky="nsew", padx=18, pady=(14, 14))
+        self.port_cards_frame.grid(row=2, column=0, sticky="nsew", padx=16, pady=(12, 12))
         self.port_cards_frame.grid_columnconfigure(0, weight=1)
+        self._bind_scroll_activity()
 
         footer = ctk.CTkFrame(
             shell,
             fg_color=SURFACE,
-            corner_radius=22,
+            corner_radius=18,
             border_width=1,
             border_color=BORDER,
         )
-        footer.grid(row=3, column=0, sticky="ew", padx=18, pady=(0, 18))
+        footer.grid(row=3, column=0, sticky="ew", padx=16, pady=(0, 16))
         footer.grid_columnconfigure(0, weight=1)
 
         self.status_label = ctk.CTkLabel(
@@ -309,8 +320,8 @@ class EasyLocalhostApp(ctk.CTk):
             text_color=TEXT_MUTED,
             font=("Segoe UI", 12),
             anchor="w",
-            padx=14,
-            pady=10,
+            padx=12,
+            pady=8,
         )
         self.status_label.grid(row=0, column=0, sticky="ew")
 
@@ -411,12 +422,16 @@ class EasyLocalhostApp(ctk.CTk):
     def expand_all_groups(self) -> None:
         groups = self._group_ports(self.app_state.ports)
         self.expanded_groups = {group.key for group in groups}
-        self._render_groups(groups, self._get_scroll_position())
+        self._schedule_render_groups(groups, self._get_scroll_position(), defer_while_scrolling=False)
         self._set_status("All folders expanded.")
 
     def collapse_all_groups(self) -> None:
         self.expanded_groups.clear()
-        self._render_groups(self._group_ports(self.app_state.ports), self._get_scroll_position())
+        self._schedule_render_groups(
+            self._group_ports(self.app_state.ports),
+            self._get_scroll_position(),
+            defer_while_scrolling=False,
+        )
         self._set_status("All folders collapsed.")
 
     def request_refresh(self, immediate: bool = False) -> None:
@@ -491,7 +506,7 @@ class EasyLocalhostApp(ctk.CTk):
         if signature != self.last_signature:
             scroll_position = self._get_scroll_position()
             self.last_signature = signature
-            self._render_groups(groups, restore_scroll=scroll_position)
+            self._schedule_render_groups(groups, restore_scroll=scroll_position)
 
         if ordered_ports:
             self._set_status(
@@ -568,19 +583,79 @@ class EasyLocalhostApp(ctk.CTk):
         if not self.port_cards_frame:
             return
 
-        for child in self.port_cards_frame.winfo_children():
-            child.destroy()
+        self.pending_render_groups = None
+        self.pending_restore_scroll = None
+        self.render_job = None
 
         if not groups:
-            empty_state = self._build_empty_state(self.port_cards_frame)
-            empty_state.grid(row=0, column=0, sticky="ew", pady=(8, 0))
+            for widget in self.group_widgets.values():
+                widget.destroy()
+            self.group_widgets.clear()
+            if self.empty_state_widget is None or not self.empty_state_widget.winfo_exists():
+                self.empty_state_widget = self._build_empty_state(self.port_cards_frame)
+            self.empty_state_widget.grid(row=0, column=0, sticky="ew", pady=(8, 0))
             return
 
-        for row_index, group in enumerate(groups):
+        if self.empty_state_widget is not None and self.empty_state_widget.winfo_exists():
+            self.empty_state_widget.grid_forget()
+
+        current_keys = {group.key for group in groups}
+        for group_key in tuple(self.group_widgets):
+            if group_key not in current_keys:
+                self.group_widgets.pop(group_key).destroy()
+
+        self._render_group_batch(groups, 0, restore_scroll)
+
+    def _render_group_batch(
+        self,
+        groups: list[PortGroupData],
+        start_index: int,
+        restore_scroll: float | None,
+    ) -> None:
+        self.render_job = None
+        started_at = time.perf_counter()
+        index = start_index
+
+        while index < len(groups):
+            self._render_single_group(groups[index], index)
+            index += 1
+            elapsed_ms = (time.perf_counter() - started_at) * 1000
+            if index < len(groups) and elapsed_ms >= 28:
+                self.render_job = self.after(
+                    1,
+                    lambda next_index=index: self._render_group_batch(
+                        groups,
+                        next_index,
+                        restore_scroll,
+                    ),
+                )
+                return
+
+        if restore_scroll is not None:
+            self.after(16, lambda: self._restore_scroll_position(restore_scroll))
+            self.after(90, lambda: self._restore_scroll_position(restore_scroll))
+            self.after(350, lambda: self._restore_scroll_position(restore_scroll))
+            self.after(900, lambda: self._restore_scroll_position(restore_scroll))
+
+        if self.pending_render_groups is not None:
+            self.render_job = self.after_idle(self._flush_pending_render)
+
+    def _render_single_group(self, group: PortGroupData, row_index: int) -> None:
+        if not self.port_cards_frame:
+            return
+
+        expanded = group.key in self.expanded_groups
+        render_signature = _group_render_signature(group, expanded)
+        group_widget = self.group_widgets.get(group.key)
+        should_grid = False
+        if group_widget is None or group_widget.render_signature != render_signature:
+            if group_widget is not None:
+                group_widget.destroy()
             group_widget = PortGroup(
                 self.port_cards_frame,
                 group=group,
-                expanded=group.key in self.expanded_groups,
+                expanded=expanded,
+                render_signature=render_signature,
                 on_toggle=self._toggle_group,
                 on_open=self._handle_open,
                 on_copy=self._handle_copy,
@@ -588,17 +663,63 @@ class EasyLocalhostApp(ctk.CTk):
                 on_group_folder=self._handle_group_folder,
                 on_close=self._handle_close,
             )
-            group_widget.grid(row=row_index, column=0, sticky="ew", pady=(0, 10))
+            self.group_widgets[group.key] = group_widget
+            should_grid = True
 
+        if getattr(group_widget, "render_row_index", None) != row_index:
+            should_grid = True
+
+        if should_grid or not group_widget.winfo_ismapped():
+            group_widget.grid(row=row_index, column=0, sticky="ew", pady=(0, 10))
+            group_widget.render_row_index = row_index
+
+    def _schedule_render_groups(
+        self,
+        groups: list[PortGroupData],
+        restore_scroll: float | None = None,
+        defer_while_scrolling: bool = True,
+    ) -> None:
+        self.pending_render_groups = groups
         if restore_scroll is not None:
-            self.after(40, lambda: self._restore_scroll_position(restore_scroll))
+            self.pending_restore_scroll = restore_scroll
+        if not defer_while_scrolling:
+            self.pending_render_defer_while_scrolling = False
+            if self.render_job is not None:
+                try:
+                    self.after_cancel(self.render_job)
+                except Exception as exc:
+                    logger.debug("Could not cancel deferred render: %s", exc)
+                self.render_job = None
+        if self.render_job is None:
+            self.render_job = self.after_idle(self._flush_pending_render)
+
+    def _flush_pending_render(self) -> None:
+        groups = self.pending_render_groups
+        restore_scroll = self.pending_restore_scroll
+        if groups is None:
+            self.render_job = None
+            self.pending_restore_scroll = None
+            self.pending_render_defer_while_scrolling = True
+            return
+
+        if self.pending_render_defer_while_scrolling and self._is_scroll_active():
+            delay_ms = max(80, int((self.scroll_hold_until - time.monotonic()) * 1000))
+            self.render_job = self.after(delay_ms, self._flush_pending_render)
+            return
+
+        self.pending_render_defer_while_scrolling = True
+        self._render_groups(groups, restore_scroll=restore_scroll)
 
     def _toggle_group(self, group_key: str) -> None:
         if group_key in self.expanded_groups:
             self.expanded_groups.remove(group_key)
         else:
             self.expanded_groups.add(group_key)
-        self._render_groups(self._group_ports(self.app_state.ports), self._get_scroll_position())
+        self._schedule_render_groups(
+            self._group_ports(self.app_state.ports),
+            self._get_scroll_position(),
+            defer_while_scrolling=False,
+        )
 
     def _build_empty_state(self, parent: ctk.CTkScrollableFrame) -> ctk.CTkFrame:
         frame = ctk.CTkFrame(
@@ -665,8 +786,8 @@ class EasyLocalhostApp(ctk.CTk):
             self.status_label.configure(text=text)
 
     def _default_geometry(self) -> str:
-        width = 580
-        height = 760
+        width = 560
+        height = 720
         margin = 24
         x = max(self.winfo_screenwidth() - width - margin, margin)
         y = margin
@@ -688,6 +809,24 @@ class EasyLocalhostApp(ctk.CTk):
         except Exception as exc:
             logger.debug("Could not restore scroll position: %s", exc)
 
+    def _bind_scroll_activity(self) -> None:
+        if not self.port_cards_frame:
+            return
+
+        try:
+            canvas = self.port_cards_frame._parent_canvas
+            canvas.bind("<MouseWheel>", self._note_scroll_activity, add="+")
+            canvas.bind("<ButtonPress-1>", self._note_scroll_activity, add="+")
+            canvas.bind("<B1-Motion>", self._note_scroll_activity, add="+")
+        except Exception as exc:
+            logger.debug("Could not bind scroll activity hooks: %s", exc)
+
+    def _note_scroll_activity(self, _event=None) -> None:
+        self.scroll_hold_until = time.monotonic() + 0.45
+
+    def _is_scroll_active(self) -> bool:
+        return time.monotonic() < self.scroll_hold_until
+
     def _set_window_icon(self) -> None:
         try:
             self.iconbitmap(get_icon_path("ico"))
@@ -706,9 +845,34 @@ class EasyLocalhostApp(ctk.CTk):
         try:
             if self.refresh_job is not None:
                 self.after_cancel(self.refresh_job)
+            if self.render_job is not None:
+                self.after_cancel(self.render_job)
             self.executor.shutdown(wait=False, cancel_futures=True)
         finally:
             self.destroy()
+
+
+def _group_render_signature(group: PortGroupData, expanded: bool) -> tuple:
+    visible_ports = group.ports if expanded else group.ports[:3]
+    return (
+        group.key,
+        expanded,
+        group.title,
+        group.path,
+        len(group.ports),
+        group.active_count,
+        tuple(
+            (
+                port.port,
+                port.pid if expanded else None,
+                port.process_name if expanded else "",
+                port.status.value,
+                port.http_status_code if expanded else None,
+                port.launch_path if expanded else "",
+            )
+            for port in visible_ports
+        ),
+    )
 
 
 class PortGroup(ctk.CTkFrame):
@@ -719,6 +883,7 @@ class PortGroup(ctk.CTkFrame):
         master,
         group: PortGroupData,
         expanded: bool,
+        render_signature: tuple,
         on_toggle,
         on_open,
         on_copy,
@@ -730,35 +895,32 @@ class PortGroup(ctk.CTkFrame):
         super().__init__(
             master,
             fg_color=SURFACE_CARD if expanded else SURFACE_ELEVATED,
-            corner_radius=28,
+            corner_radius=24,
             border_width=1,
             border_color=border_color,
         )
+        self.render_signature = render_signature
         self.grid_columnconfigure(0, weight=1)
 
         header = ctk.CTkFrame(self, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew", padx=14, pady=(12, 12))
+        header.grid(row=0, column=0, sticky="ew", padx=12, pady=(10, 10))
         header.grid_columnconfigure(1, weight=1)
 
-        toggle_pill = ctk.CTkFrame(
+        toggle_pill = ctk.CTkButton(
             header,
+            text="-" if expanded else "+",
             fg_color=ACCENT_DEEP if group.active_count > 0 else SURFACE_ROW,
-            corner_radius=15,
+            hover_color=SURFACE_TINT,
+            corner_radius=14,
             border_width=1,
             border_color=ACCENT if expanded and group.active_count > 0 else BORDER_STRONG,
-            width=34,
-            height=34,
-        )
-        toggle_pill.grid(row=0, column=0, sticky="w", padx=(0, 10))
-        toggle_pill.grid_propagate(False)
-
-        toggle_icon = ctk.CTkLabel(
-            toggle_pill,
-            text="▾" if expanded else "▸",
+            width=30,
+            height=30,
             text_color=ACCENT if group.active_count > 0 else TEXT_SOFT,
             font=("Segoe UI Semibold", 15),
+            command=lambda: on_toggle(group.key),
         )
-        toggle_icon.place(relx=0.5, rely=0.5, anchor="center")
+        toggle_pill.grid(row=0, column=0, sticky="w", padx=(0, 10))
 
         info = ctk.CTkFrame(header, fg_color="transparent")
         info.grid(row=0, column=1, sticky="ew")
@@ -779,7 +941,7 @@ class PortGroup(ctk.CTkFrame):
 
         stats = ctk.CTkLabel(
             top_line,
-            text=f"{len(group.ports)} localhost | {group.active_count} active",
+            text=f"{len(group.ports)} ports / {group.active_count} active",
             text_color=ACCENT if group.active_count > 0 else TEXT_SOFT,
             fg_color=ACCENT_DEEP if group.active_count > 0 else SURFACE_ROW,
             corner_radius=14,
@@ -839,30 +1001,67 @@ class PortGroup(ctk.CTkFrame):
         folder_button.grid(row=0, column=2, sticky="e", padx=(12, 0))
 
         _bind_left_click(
-            [header, toggle_pill, toggle_icon, info, top_line, title, stats, detail_line, path_label, chips, *chip_widgets],
+            [header, info, top_line, title, stats, detail_line, path_label, chips, *chip_widgets],
             lambda: on_toggle(group.key),
         )
 
+        self.row_render_job: str | None = None
+        self.body: ctk.CTkFrame | None = None
+        self.group_ports = group.ports
+        self.next_port_row = 0
+        self.on_open = on_open
+        self.on_copy = on_copy
+        self.on_folder = on_folder
+        self.on_close = on_close
+
         if expanded:
-            body = ctk.CTkFrame(self, fg_color="transparent")
-            body.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 10))
-            body.grid_columnconfigure(0, weight=1)
+            self.body = ctk.CTkFrame(self, fg_color="transparent")
+            self.body.grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 8))
+            self.body.grid_columnconfigure(0, weight=1)
+            self.row_render_job = self.after_idle(self._render_port_batch)
 
-            for row_index, port in enumerate(group.ports):
-                card = PortCard(
-                    body,
-                    port_info=port,
-                    row_index=row_index,
-                    on_open=on_open,
-                    on_copy=on_copy,
-                    on_folder=on_folder,
-                    on_close=on_close,
-                )
-                card.grid(row=row_index, column=0, sticky="ew", pady=(0, 8))
+    def _render_port_batch(self) -> None:
+        self.row_render_job = None
+        if self.body is None or not self.body.winfo_exists():
+            return
+
+        started_at = time.perf_counter()
+        while self.next_port_row < len(self.group_ports):
+            row_index = self.next_port_row
+            port = self.group_ports[row_index]
+            card = PortCard(
+                self.body,
+                port_info=port,
+                row_index=row_index,
+                on_open=self.on_open,
+                on_copy=self.on_copy,
+                on_folder=self.on_folder,
+                on_close=self.on_close,
+            )
+            card.grid(row=row_index, column=0, sticky="ew", pady=(0, 6))
+            self.next_port_row += 1
+
+            elapsed_ms = (time.perf_counter() - started_at) * 1000
+            if self.next_port_row < len(self.group_ports) and elapsed_ms >= 12:
+                self.row_render_job = self.after(1, self._render_port_batch)
+                return
+
+    def destroy(self) -> None:
+        if self.row_render_job is not None:
+            try:
+                self.after_cancel(self.row_render_job)
+            except Exception as exc:
+                logger.debug("Could not cancel pending row render: %s", exc)
+            self.row_render_job = None
+        super().destroy()
 
 
-class PortCard(ctk.CTkFrame):
-    """Single compact row representing one localhost process."""
+class PortCard(tk.Canvas):
+    """Single compact row representing one localhost process.
+
+    A canvas row replaces many nested widgets. This keeps large localhost lists
+    responsive while preserving a polished visual treatment.
+    """
 
     def __init__(
         self,
@@ -876,129 +1075,210 @@ class PortCard(ctk.CTkFrame):
     ) -> None:
         status_label, status_color, status_surface = STATUS_META[port_info.status]
         row_color = SURFACE_ROW if row_index % 2 == 0 else SURFACE_ROW_ALT
-        super().__init__(
-            master,
-            fg_color=row_color,
-            corner_radius=20,
-            border_width=1,
-            border_color=BORDER,
-        )
+        super().__init__(master, height=108, bg=SURFACE_CARD, highlightthickness=0, bd=0)
+        self.configure(cursor="arrow")
+        self.port_info = port_info
+        self.row_color = row_color
+        self.status_label = status_label
+        self.status_color = status_color
+        self.status_surface = status_surface
+        self.on_open = on_open
+        self.on_copy = on_copy
+        self.on_folder = on_folder
+        self.on_close = on_close
+        self.hover_button: str | None = None
+        self.button_regions: dict[str, tuple[int, int, int, int]] = {}
 
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_columnconfigure(2, weight=0)
+        self.bind("<Configure>", lambda _event: self._draw())
+        self.bind("<Motion>", self._handle_motion)
+        self.bind("<Leave>", self._handle_leave)
+        self.bind("<Button-1>", self._handle_click)
+        self._draw()
 
-        status_bar = ctk.CTkFrame(
-            self,
-            width=5,
-            corner_radius=4,
-            fg_color=status_color,
-        )
-        status_bar.grid(row=0, column=0, rowspan=5, sticky="nsw", padx=(9, 0), pady=10)
-        status_bar.grid_propagate(False)
+    def _draw(self) -> None:
+        self.delete("all")
+        width = max(self.winfo_width(), 420)
+        height = 108
+        self.button_regions.clear()
 
-        port_badge = ctk.CTkFrame(
-            self,
-            fg_color=SURFACE_ELEVATED,
-            corner_radius=17,
-            border_width=1,
-            border_color=status_color,
-        )
-        port_badge.grid(row=0, column=1, sticky="w", padx=(16, 10), pady=(11, 4))
-
-        port_badge_label = ctk.CTkLabel(
-            port_badge,
-            text=f":{port_info.port}",
-            text_color=TEXT,
-            fg_color="transparent",
+        _rounded_rect(self, 0, 0, width - 1, height - 2, 20, fill=self.row_color, outline=BORDER)
+        _rounded_rect(self, 10, 12, 15, height - 14, 4, fill=self.status_color, outline=self.status_color)
+        _rounded_rect(self, 26, 14, 112, 46, 14, fill=SURFACE_ELEVATED, outline=BORDER)
+        self.create_text(
+            69,
+            30,
+            text=f":{self.port_info.port}",
+            fill=TEXT,
             font=("Consolas", 18, "bold"),
-            padx=12,
-            pady=7,
         )
-        port_badge_label.grid(row=0, column=0)
 
-        status_badge = ctk.CTkFrame(
+        status_width = max(72, tkfont.Font(family="Segoe UI Semibold", size=10).measure(self.status_label) + 24)
+        status_left = width - status_width - 18
+        _rounded_rect(
             self,
-            fg_color=status_surface,
-            corner_radius=14,
-            border_width=1,
-            border_color=status_color,
+            status_left,
+            14,
+            width - 18,
+            42,
+            14,
+            fill=self.status_surface,
+            outline=self.status_color,
         )
-        status_badge.grid(row=0, column=2, sticky="e", padx=(0, 12), pady=(11, 4))
-
-        status_badge_label = ctk.CTkLabel(
-            status_badge,
-            text=status_label,
-            text_color=status_color,
-            fg_color="transparent",
-            font=("Segoe UI Semibold", 11),
-            padx=9,
-            pady=5,
+        self.create_text(
+            status_left + status_width / 2,
+            28,
+            text=self.status_label,
+            fill=self.status_color,
+            font=("Segoe UI Semibold", 10),
         )
-        status_badge_label.grid(row=0, column=0)
 
-        process_line = ctk.CTkLabel(
-            self,
-            text=port_info.process_name,
-            text_color=TEXT,
-            font=("Segoe UI Semibold", 15),
-            anchor="w",
+        title_font = tkfont.Font(family="Segoe UI Semibold", size=14)
+        detail_font = tkfont.Font(family="Segoe UI", size=11)
+        muted_font = tkfont.Font(family="Segoe UI", size=10)
+        text_left = 126
+        text_right = max(text_left + 80, status_left - 12)
+        self.create_text(
+            text_left,
+            21,
+            text=_ellipsize_text(self.port_info.process_name, title_font, text_right - text_left),
+            fill=TEXT,
+            font=title_font,
+            anchor="nw",
         )
-        process_line.grid(row=1, column=1, columnspan=2, sticky="ew", padx=(16, 12))
-
-        details = self._build_runtime_text(port_info)
-        detail_line = ctk.CTkLabel(
-            self,
-            text=details,
-            text_color=TEXT_SOFT,
-            font=("Segoe UI", 12),
-            anchor="w",
+        self.create_text(
+            text_left,
+            45,
+            text=_ellipsize_text(self._build_runtime_text(self.port_info), detail_font, width - text_left - 24),
+            fill=TEXT_SOFT,
+            font=detail_font,
+            anchor="nw",
         )
-        detail_line.grid(row=2, column=1, columnspan=2, sticky="ew", padx=(16, 12), pady=(2, 5))
-
-        path_line = ctk.CTkLabel(
-            self,
-            text=truncate_path(port_info.launch_path or port_info.cwd or port_info.exe_path, 68)
-            or "No source path resolved",
-            text_color=TEXT_MUTED,
-            font=("Segoe UI", 11),
-            anchor="w",
-            justify="left",
-            wraplength=440,
+        source_path = self.port_info.launch_path or self.port_info.cwd or self.port_info.exe_path
+        self.create_text(
+            26,
+            60,
+            text=_ellipsize_text(source_path or "No source path resolved", muted_font, width - 52),
+            fill=TEXT_MUTED,
+            font=muted_font,
+            anchor="nw",
         )
-        path_line.grid(row=3, column=1, columnspan=2, sticky="ew", padx=(16, 12), pady=(0, 9))
 
-        commands = ctk.CTkFrame(self, fg_color="transparent")
-        commands.grid(row=4, column=1, columnspan=2, sticky="ew", padx=(16, 12), pady=(0, 11))
-        for index in range(4):
-            commands.grid_columnconfigure(index, weight=1)
+        self._draw_button("open", "Open", 26, "primary")
+        self._draw_button("copy", "Copy", 104, "ghost")
+        self._draw_button("source", "Source", 180, "ghost")
+        self._draw_button("close", "Close", width - 90, "danger")
 
-        self._make_button(commands, "Open", 0, lambda: on_open(port_info), "primary")
-        self._make_button(commands, "Copy", 1, lambda: on_copy(port_info), "ghost")
-        self._make_button(commands, "Source", 2, lambda: on_folder(port_info), "ghost")
-        self._make_button(commands, "Close", 3, lambda: on_close(port_info), "danger")
-
-    def _make_button(self, parent, text: str, column: int, command, variant: str) -> None:
+    def _draw_button(self, key: str, text: str, x: int, variant: str) -> None:
+        width = 68 if text != "Source" else 76
+        if key == "close":
+            width = 64
+        y1, y2 = 78, 102
         fg_color, hover_color, border_color, text_color = _button_colors(variant)
-        button = ctk.CTkButton(
-            parent,
+        fill = hover_color if self.hover_button == key else fg_color
+        if fill == "transparent":
+            fill = self.row_color
+        _rounded_rect(self, x, y1, x + width, y2, 12, fill=fill, outline=border_color)
+        self.create_text(
+            x + width / 2,
+            y1 + 12,
             text=text,
-            height=31,
-            corner_radius=15,
-            fg_color=fg_color,
-            hover_color=hover_color,
-            border_width=1,
-            border_color=border_color,
-            text_color=text_color,
-            font=("Segoe UI Semibold", 11),
-            command=command,
+            fill=text_color,
+            font=("Segoe UI Semibold", 10),
         )
-        button.grid(row=0, column=column, sticky="ew", padx=(0 if column == 0 else 7, 0))
+        self.button_regions[key] = (x, y1, x + width, y2)
+
+    def _button_at(self, x: int, y: int) -> str | None:
+        for key, (x1, y1, x2, y2) in self.button_regions.items():
+            if x1 <= x <= x2 and y1 <= y <= y2:
+                return key
+        return None
+
+    def _handle_motion(self, event) -> None:
+        key = self._button_at(event.x, event.y)
+        if key != self.hover_button:
+            self.hover_button = key
+            self.configure(cursor="hand2" if key else "arrow")
+            self._draw()
+
+    def _handle_leave(self, _event) -> None:
+        if self.hover_button is not None:
+            self.hover_button = None
+            self.configure(cursor="arrow")
+            self._draw()
+
+    def _handle_click(self, event) -> None:
+        key = self._button_at(event.x, event.y)
+        if key == "open":
+            self.on_open(self.port_info)
+        elif key == "copy":
+            self.on_copy(self.port_info)
+        elif key == "source":
+            self.on_folder(self.port_info)
+        elif key == "close":
+            self.on_close(self.port_info)
 
     def _build_runtime_text(self, port_info: PortInfo) -> str:
         details = [f"PID {port_info.pid}", port_info.status.value]
         if port_info.http_status_code:
             details.append(f"HTTP {port_info.http_status_code}")
         return " | ".join(details)
+
+
+def _rounded_rect(
+    canvas: tk.Canvas,
+    x1: int,
+    y1: int,
+    x2: int,
+    y2: int,
+    radius: int,
+    **kwargs,
+) -> int:
+    points = [
+        x1 + radius,
+        y1,
+        x2 - radius,
+        y1,
+        x2,
+        y1,
+        x2,
+        y1 + radius,
+        x2,
+        y2 - radius,
+        x2,
+        y2,
+        x2 - radius,
+        y2,
+        x1 + radius,
+        y2,
+        x1,
+        y2,
+        x1,
+        y2 - radius,
+        x1,
+        y1 + radius,
+        x1,
+        y1,
+    ]
+    return canvas.create_polygon(points, smooth=True, splinesteps=12, **kwargs)
+
+
+def _ellipsize_text(text: str, font: tkfont.Font, max_width: int) -> str:
+    if max_width <= 0 or font.measure(text) <= max_width:
+        return text
+
+    ellipsis = "..."
+    if font.measure(ellipsis) > max_width:
+        return ""
+
+    low = 0
+    high = len(text)
+    while low < high:
+        middle = (low + high + 1) // 2
+        if font.measure(text[:middle] + ellipsis) <= max_width:
+            low = middle
+        else:
+            high = middle - 1
+    return text[:low].rstrip() + ellipsis
 
 
 def _port_chip_background(status: PortStatus) -> str:

@@ -1,10 +1,10 @@
-# Easy Localhost v3
+# Easy Localhost
 
-Easy Localhost v3 is a compact Windows desktop controller for local development servers. It keeps a live view of the localhost ports you actually care about, groups them by project folder, shows which ones are healthy, and lets you act on them without dropping to terminal commands.
+Easy Localhost is a compact Windows desktop controller for local development servers. It keeps a live view of the localhost ports you actually care about, groups them by project folder, shows which ones are healthy, and lets you act on them without dropping to terminal commands.
 
-The v3 refresh introduces a darker graphite UI, a cleaner monogram icon, compact collapsible folder summaries, a single-cycle refresh control, and a more consistent portable Windows build with executable version metadata.
+The current release uses a darker graphite UI, a cleaner monogram icon, compact collapsible folder summaries, a single-cycle refresh control, smoother dense-list rendering, and a consistent portable Windows build with executable version metadata.
 
-![Easy Localhost v3 preview](docs/preview-v3.png)
+![Easy Localhost preview](docs/preview-v3.png)
 
 ## What It Solves
 
@@ -28,9 +28,12 @@ Easy Localhost keeps that focused in a small always-on-top panel built only for 
 - Clickable group headers to expand or collapse folders quickly
 - Up to three visible port chips on collapsed folders for fast scanning
 - Stable scroll behavior during refreshes
+- Cached and batched rendering so large localhost sessions remain responsive
+- Progressive row rendering inside expanded folders to avoid UI freezes
 - Manual reload plus a single refresh button that cycles through `Auto`, `10s`, `5s`, and `Manual`
 - Automatic project detection from Git roots, `package.json`, and common project markers
 - HTTP health probing to distinguish active servers from plain listeners
+- Short local-only health timeouts tuned for dense dev sessions
 - One-click actions per entry:
   - `Open` in Chrome when available
   - `Copy` localhost URL
@@ -79,6 +82,7 @@ The generated binary is:
 
 ```text
 dist\EasyLocalhost.exe
+dist\EasyLocalhost.exe.sha256
 ```
 
 ## Windows SmartScreen
