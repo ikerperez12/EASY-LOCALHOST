@@ -25,8 +25,10 @@ Easy Localhost keeps that focused in a small always-on-top panel built only for 
 - Graphite and lime visual system with pure black background and sharper hierarchy
 - Shared monogram `EL` app icon embedded in the UI, executable, and release assets
 - Collapsible grouping by project or folder with compact summary rows
+- All folders start collapsed so dense sessions stay calm until you open what you need
 - Clickable group headers to expand or collapse folders quickly
 - Up to three visible port chips on collapsed folders for fast scanning
+- Exact source file paths are shown when a localhost process was launched from a real command file
 - Stable scroll behavior during refreshes
 - Cached and batched rendering so large localhost sessions remain responsive
 - Progressive row rendering inside expanded folders to avoid UI freezes

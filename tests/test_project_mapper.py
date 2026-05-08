@@ -58,6 +58,25 @@ class ProjectMapperTests(unittest.TestCase):
             self.assertEqual(name, "portfolio-site")
             self.assertEqual(root, project_root)
 
+    def test_uses_command_file_project_when_cwd_is_too_general(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            general_cwd = os.path.join(temp_dir, "user-home")
+            project_root = os.path.join(general_cwd, "portfolio")
+            os.makedirs(project_root)
+            with open(os.path.join(project_root, "package.json"), "w", encoding="utf-8") as handle:
+                json.dump({"name": "portfolio-site"}, handle)
+
+            server_file = os.path.join(project_root, "server.py")
+            with open(server_file, "w", encoding="utf-8") as handle:
+                handle.write("print('server')")
+
+            name, root = identify_project_from_process(
+                general_cwd,
+                ("python", server_file),
+            )
+            self.assertEqual(name, "portfolio-site")
+            self.assertEqual(root, project_root)
+
 
 if __name__ == "__main__":
     unittest.main()

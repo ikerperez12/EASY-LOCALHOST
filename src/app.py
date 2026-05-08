@@ -20,7 +20,7 @@ from PIL import Image
 from actions import ActionResult, kill_process_tree, open_in_browser, open_in_folder
 from controller import LocalhostController, ScanResult
 from models import AppState, PortInfo, PortStatus, RefreshMode, next_refresh_mode
-from presentation_state import merge_new_group_expansion, summarize_port_chips
+from presentation_state import merge_group_visibility_state, summarize_port_chips
 from utils import APP_DISPLAY_NAME, APP_NAME, APP_VERSION, get_icon_path, truncate_path
 
 logger = logging.getLogger(__name__)
@@ -549,7 +549,7 @@ class EasyLocalhostApp(ctk.CTk):
         )
 
     def _expand_new_groups(self, groups: list[PortGroupData]) -> None:
-        self.expanded_groups, self.known_groups = merge_new_group_expansion(
+        self.expanded_groups, self.known_groups = merge_group_visibility_state(
             self.expanded_groups,
             self.known_groups,
             ((group.key, group.active_count) for group in groups),
@@ -786,8 +786,8 @@ class EasyLocalhostApp(ctk.CTk):
             self.status_label.configure(text=text)
 
     def _default_geometry(self) -> str:
-        width = 560
-        height = 720
+        width = min(620, max(560, self.winfo_screenwidth() - 48))
+        height = min(860, max(740, self.winfo_screenheight() - 48))
         margin = 24
         x = max(self.winfo_screenwidth() - width - margin, margin)
         y = margin
@@ -868,7 +868,7 @@ def _group_render_signature(group: PortGroupData, expanded: bool) -> tuple:
                 port.process_name if expanded else "",
                 port.status.value,
                 port.http_status_code if expanded else None,
-                port.launch_path if expanded else "",
+                port.source_display_path if expanded else "",
             )
             for port in visible_ports
         ),
@@ -1153,11 +1153,16 @@ class PortCard(tk.Canvas):
             font=detail_font,
             anchor="nw",
         )
-        source_path = self.port_info.launch_path or self.port_info.cwd or self.port_info.exe_path
+        source_path = self.port_info.source_display_path
+        source_label = "File" if self.port_info.command_file_path else "Path"
         self.create_text(
             26,
             60,
-            text=_ellipsize_text(source_path or "No source path resolved", muted_font, width - 52),
+            text=_ellipsize_text(
+                f"{source_label}: {source_path}" if source_path else "No source path resolved",
+                muted_font,
+                width - 52,
+            ),
             fill=TEXT_MUTED,
             font=muted_font,
             anchor="nw",

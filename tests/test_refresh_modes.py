@@ -13,7 +13,7 @@ from models import (
     next_refresh_mode,
     refresh_interval_for_mode,
 )
-from presentation_state import merge_new_group_expansion, summarize_port_chips
+from presentation_state import merge_group_visibility_state, summarize_port_chips
 
 
 class RefreshModeTests(unittest.TestCase):
@@ -42,8 +42,8 @@ class RefreshModeTests(unittest.TestCase):
 
 
 class PresentationStateTests(unittest.TestCase):
-    def test_expands_only_new_active_groups(self) -> None:
-        expanded, known = merge_new_group_expansion(
+    def test_keeps_new_groups_collapsed_by_default(self) -> None:
+        expanded, known = merge_group_visibility_state(
             expanded_groups={"existing"},
             known_groups={"existing"},
             groups=(
@@ -52,7 +52,7 @@ class PresentationStateTests(unittest.TestCase):
                 ("listening-new", 0),
             ),
         )
-        self.assertEqual(expanded, {"existing", "active-new"})
+        self.assertEqual(expanded, {"existing"})
         self.assertEqual(known, {"existing", "active-new", "listening-new"})
 
     def test_summarizes_group_ports_with_three_chip_limit(self) -> None:
@@ -63,6 +63,29 @@ class PresentationStateTests(unittest.TestCase):
             PortInfo(8765, 4, "dotnet.exe", "", "", "demo", PortStatus.LISTENING),
         ]
         self.assertEqual(summarize_port_chips(ports), (":3000", ":5173", ":8000"))
+
+    def test_source_display_prefers_exact_command_file(self) -> None:
+        with self.subTest("relative command file"):
+            import tempfile
+
+            with tempfile.TemporaryDirectory() as temp_dir:
+                script_path = os.path.join(temp_dir, "server.py")
+                with open(script_path, "w", encoding="utf-8") as handle:
+                    handle.write("print('server')")
+
+                port = PortInfo(
+                    8765,
+                    10,
+                    "python.exe",
+                    "",
+                    temp_dir,
+                    "demo",
+                    PortStatus.ACTIVE,
+                    command_args=("python", "server.py"),
+                    project_root=temp_dir,
+                )
+                self.assertEqual(port.command_file_path, script_path)
+                self.assertEqual(port.source_display_path, script_path)
 
 
 if __name__ == "__main__":

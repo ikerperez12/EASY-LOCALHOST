@@ -44,17 +44,25 @@ def identify_project_from_process(
     """
     Return ``(project_name, project_root)`` for a process.
 
-    ``cwd`` is trusted first because it is the most reliable origin for dev
-    servers. Command-line paths are only used as a fallback when cwd is absent
-    or points to a transient runtime folder.
+    Command-line paths are checked first because they can point to the exact
+    server file when ``cwd`` is a broad directory. Runtime/cache folders are
+    ignored, so a real project ``cwd`` still wins over transient tool paths.
     """
+    fallback_roots: list[str] = []
     for candidate in _candidate_roots(cwd, command_args, exe_path):
         project_root = find_project_root(candidate)
         if not project_root:
             continue
-        return identify_project(project_root), project_root
+        if _looks_like_project_root(project_root):
+            return identify_project(project_root), project_root
+        if project_root not in fallback_roots:
+            fallback_roots.append(project_root)
 
-    fallback = _normalize_existing_dir(cwd) or _normalize_existing_dir(exe_path)
+    fallback = (
+        (fallback_roots[0] if fallback_roots else "")
+        or _normalize_existing_dir(cwd)
+        or _normalize_existing_dir(exe_path)
+    )
     if fallback:
         return identify_project(fallback), fallback
 
@@ -105,20 +113,18 @@ def _candidate_roots(
     """Yield possible project roots in descending reliability order."""
     seen: set[str] = set()
 
+    for raw in command_args[1:]:
+        candidate = _normalize_command_arg_dir(raw, cwd)
+        if not candidate or _is_ignored_runtime_path(candidate) or candidate in seen:
+            continue
+        seen.add(candidate)
+        yield candidate
+
     for raw in (cwd,):
         normalized = _normalize_existing_dir(raw)
         if normalized and normalized not in seen:
             seen.add(normalized)
             yield normalized
-
-    for raw in command_args[1:]:
-        candidate = _normalize_existing_dir(raw)
-        if not candidate:
-            candidate = _normalize_existing_dir(os.path.dirname(raw.strip('"')))
-        if not candidate or _is_ignored_runtime_path(candidate) or candidate in seen:
-            continue
-        seen.add(candidate)
-        yield candidate
 
     exe_dir = _normalize_existing_dir(exe_path)
     if exe_dir and not _is_ignored_runtime_path(exe_dir) and exe_dir not in seen:
@@ -135,6 +141,28 @@ def _normalize_existing_dir(path: str) -> str:
         return cleaned
     if os.path.isfile(cleaned):
         return os.path.dirname(cleaned)
+    return ""
+
+
+def _normalize_command_arg_dir(raw_arg: str, cwd: str = "") -> str:
+    """Resolve a command argument to an existing local directory when possible."""
+    if not raw_arg:
+        return ""
+
+    cleaned = raw_arg.strip('"')
+    candidates = [cleaned]
+    if cwd and not os.path.isabs(cleaned):
+        candidates.append(os.path.join(cwd, cleaned))
+
+    for candidate in candidates:
+        normalized = _normalize_existing_dir(candidate)
+        if normalized:
+            return normalized
+
+        parent = _normalize_existing_dir(os.path.dirname(candidate))
+        if parent:
+            return parent
+
     return ""
 
 

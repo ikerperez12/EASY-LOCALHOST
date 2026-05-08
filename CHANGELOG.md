@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.0.2
+
+- Changed the default folder behavior so all localhost groups start collapsed until the user opens them.
+- Increased the default window size with a taller initial layout for easier scanning.
+- Improved project resolution when a process starts from a generic directory but references a project file in its command line.
+- Show exact source files in process rows when the command line points to an existing file.
+- Kept manually opened folders as user-owned state instead of auto-opening newly detected active groups.
+
 ## 3.0.1
 
 - Reworked dense list rendering so unchanged folders are reused instead of rebuilt on every refresh.

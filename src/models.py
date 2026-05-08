@@ -5,6 +5,7 @@ Defines the core data structures used throughout the application.
 
 from dataclasses import dataclass, field
 from enum import Enum
+import os
 from typing import Optional
 
 
@@ -107,6 +108,30 @@ class PortInfo:
     def launch_path(self) -> str:
         """Returns the best available local path for project actions."""
         return self.project_root or self.cwd or self.exe_path
+
+    @property
+    def command_file_path(self) -> str:
+        """Returns the first existing file referenced by the command line."""
+        for raw_arg in self.command_args[1:]:
+            if not raw_arg or raw_arg.startswith("-"):
+                continue
+
+            cleaned = raw_arg.strip('"')
+            candidates = [cleaned]
+            if self.cwd and not os.path.isabs(cleaned):
+                candidates.append(os.path.join(self.cwd, cleaned))
+
+            for candidate in candidates:
+                normalized = os.path.normpath(candidate)
+                if os.path.isfile(normalized):
+                    return normalized
+
+        return ""
+
+    @property
+    def source_display_path(self) -> str:
+        """Returns the most precise path to show in the UI."""
+        return self.command_file_path or self.project_root or self.cwd or self.exe_path
 
     @property
     def command_preview(self) -> str:

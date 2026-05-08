@@ -10,7 +10,7 @@ import sys
 # Application metadata
 APP_NAME = "Easy Localhost"
 APP_DISPLAY_NAME = "Easy Localhost"
-APP_VERSION = "3.0.1"
+APP_VERSION = "3.0.2"
 APP_AUTHOR = "Iker"
 APP_EXE_NAME = "EasyLocalhost.exe"
 
