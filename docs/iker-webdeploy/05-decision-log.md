@@ -10,3 +10,6 @@
 
 - Decision: keep GitHub Releases as the deployment path.
 - Reason: Easy Localhost is a Windows desktop utility, not a web app.
+
+- Decision: compress the `3.0.3` header and move global expand/collapse actions into the summary bar.
+- Reason: the app is intended to stay always-on-top, so primary chrome must be useful without occupying excessive screen area.

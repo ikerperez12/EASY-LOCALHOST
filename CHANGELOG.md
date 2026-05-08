@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.0.3
+
+- Reduced the header footprint so the app feels more like a compact utility widget and less like a large hero panel.
+- Moved `Expand` and `Collapse` into the summary bar to keep the primary controls smaller and easier to scan.
+- Reduced default window dimensions while preserving enough vertical space for dense localhost sessions.
+- Tightened folder rows, process rows, buttons, chips, footer, and scroll spacing for a less invasive always-on-top layout.
+- Kept all groups collapsed by default and retained exact source path display from the previous release.
+
 ## 3.0.2
 
 - Changed the default folder behavior so all localhost groups start collapsed until the user opens them.
