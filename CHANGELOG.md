@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.0.4
+
+- Replaced the app icon with a sharper graphite/lime monogram designed to stay readable at small Windows icon sizes.
+- Regenerated `assets/icon.png` and `assets/icon.ico` so the window, header, executable, and release assets share the same mark.
+- Added local-only workspace protection for promotion drafts with `local/` ignored by Git.
+
 ## 3.0.3
 
 - Reduced the header footprint so the app feels more like a compact utility widget and less like a large hero panel.

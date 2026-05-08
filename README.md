@@ -2,7 +2,7 @@
 
 Easy Localhost is a compact Windows desktop controller for local development servers. It keeps a live view of the localhost ports you actually care about, groups them by project folder, shows which ones are healthy, and lets you act on them without dropping to terminal commands.
 
-The current release uses a compact graphite UI, a cleaner monogram icon, collapsed-by-default folder summaries, a single-cycle refresh control, smoother dense-list rendering, and a consistent portable Windows build with executable version metadata.
+The current release uses a compact graphite UI, a sharper graphite/lime monogram icon, collapsed-by-default folder summaries, a single-cycle refresh control, smoother dense-list rendering, and a consistent portable Windows build with executable version metadata.
 
 ![Easy Localhost preview](docs/preview-v3.png)
 
@@ -24,7 +24,7 @@ Easy Localhost keeps that focused in a small always-on-top panel built only for 
 - Compact floating Windows UI designed to stay visible in a screen corner
 - Smaller, less invasive header and tighter controls for always-on-top use
 - Graphite and lime visual system with pure black background and sharper hierarchy
-- Shared monogram `EL` app icon embedded in the UI, executable, and release assets
+- Sharp shared `EL` app icon embedded in the UI, executable, and release assets
 - Collapsible grouping by project or folder with compact summary rows
 - All folders start collapsed so dense sessions stay calm until you open what you need
 - Clickable group headers to expand or collapse folders quickly
